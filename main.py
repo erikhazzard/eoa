@@ -21,7 +21,7 @@ from direct.gui.DirectGui import *
 from pandac.PandaModules import *
 
 #Panda AI module
-from libpandaai import *
+#from libpandaai import *
 
 #EoA Modules
 from EoA import *
@@ -42,7 +42,6 @@ class Universe(DirectObject):
     def __init__(self):
         base.setFrameRateMeter(True)
         render.analyze() 
-        self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, "cam-left":0, "cam-right":0}
         base.win.setClearColor(Vec4(0,0,1,1))
         
         
@@ -76,14 +75,14 @@ class Universe(DirectObject):
         self.configureInput()
           
         ''' Set up lights and filters '''
-        self.setupLightsAndFilters()  
+        #self.setupLightsAndFilters()  
           
         '''Set up Actors'''
         self.Actors = {}
         #Create the main character
         self.Actors['PC'] = EoAActor(name = "PC", modelName="ralph", startPos=self.environ.find("**/start_point").getPos())
-        self.Actors['Pet'] = EoAActor(name = "Pet", modelName="eggCharacter1", startPos=self.environ.find("**/start_point").getPos(), scale=.05)
-        self.Actors['Pet'].loop('run')
+        #self.Actors['Pet'] = EoAActor(name = "Pet", modelName="eggCharacter1", startPos=self.environ.find("**/start_point").getPos(), scale=.05)
+        #self.Actors['Pet'].loop('run')
         
         #Give the main character some weapons
         self.Actors['PC'].equipItem(location='primary', modelLocation='RightHand', item='sword', itemPos=[.11,.19,.06], itemHpr=[0,0,90], itemScale=1)
@@ -93,6 +92,17 @@ class Universe(DirectObject):
         self.setupCollisionDetection()
         
         
+        #add move task to handle character movement
+        taskMgr.add(self.move,"moveTask")
+        
+        # Game state variables
+        self.isMoving = False
+
+        # Set up the camera
+        base.disableMouse()
+        base.camera.setPos(self.Actors['PC'].getX(),self.Actors['PC'].getY()+10,2)
+
+        """
         '''Setup AI'''
         self.AIWorld = AIWorld(render)
         taskMgr.add(self.AIUpdate,"AIUpdate")
@@ -102,8 +112,6 @@ class Universe(DirectObject):
         self.AIBehaviors = self.AIChar.getAiBehaviors() 
         self.AIBehaviors.pursue(self.Actors['PC'], 1)
         
-        #add move task to handle character movement
-        taskMgr.add(self.move,"moveTask")
 
         
         '''TESTING - FLOCKING BEHAVIOR'''
@@ -143,14 +151,9 @@ class Universe(DirectObject):
             self.cTrav.addCollider(self.flockCollide[i], self.flockCollideHandler[i])
             
         self.AIWorld.addFlock(self.flockObject) #add flock to world
-        
-        # Game state variables
-        self.isMoving = False
+        """
 
-        # Set up the camera
-        base.disableMouse()
-        base.camera.setPos(self.Actors['PC'].getX(),self.Actors['PC'].getY()+10,2)
-        
+               
         
     '''Input'''
     def setKey(self, key, value):
@@ -162,6 +165,7 @@ class Universe(DirectObject):
         self.mousebtn[btn] = value
     
     def configureInput(self):
+        self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, "cam-left":0, "cam-right":0, "cam-up":0, "cam-down":0}
         '''Set up input keys
         ToDo - read from config file'''
         # Accept the control keys for movement and rotation
@@ -182,6 +186,10 @@ class Universe(DirectObject):
         self.accept("arrow_right", self.setKey, ["cam-right",1])
         self.accept("arrow_left-up", self.setKey, ["cam-left",0])
         self.accept("arrow_right-up", self.setKey, ["cam-right",0])
+        self.accept("arrow_up", self.setKey, ["cam-up",1])
+        self.accept("arrow_down", self.setKey, ["cam-down",1])
+        self.accept("arrow_up-up", self.setKey, ["cam-up",0])
+        self.accept("arrow_down-up", self.setKey, ["cam-down",0])
 
         #mouse keys
         #mouse1 is left click
@@ -234,14 +242,14 @@ class Universe(DirectObject):
         self.cTrav.addCollider(self.camGroundColNp, self.camGroundHandler)
         '''Collision Rays'''
         # Uncomment this line to see the collision rays
-        self.PCGroundColNp.show()
-        self.camGroundColNp.show()
+        #self.PCGroundColNp.show()
+        #self.camGroundColNp.show()
        
 
 
         #Uncomment this line to show a visual representation of the 
         #collisions occuring
-        self.cTrav.showCollisions(render)
+        #self.cTrav.showCollisions(render)
         
 
 
@@ -362,6 +370,10 @@ class Universe(DirectObject):
             base.camera.setX(base.camera, -(elapsed*20))
         if (self.keyMap["cam-right"]!=0):
             base.camera.setX(base.camera, +(elapsed*20))
+        if (self.keyMap["cam-up"]!=0):
+            base.camera.setY(base.camera, -(elapsed*20))
+        if (self.keyMap["cam-down"]!=0):
+            base.camera.setY(base.camera, +(elapsed*20))
         
         # If the camera is too far from ralph, move it closer.
         # If the camera is too close to ralph, move it farther.

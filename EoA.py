@@ -24,6 +24,10 @@ from pandac.PandaModules import *
 class EoAActor(Actor):
     '''Actor
     Our main actor class'''
+    targetDir = os.path.abspath(sys.path[0])
+    targetDir = Filename.fromOsSpecific(targetDir).getFullpath()
+
+    
     def __init__(self, name="Unnamed", modelName="default", scale=.2, health=0, power=0, addToWorld=True, startPos=False, modelStates=False ):
         '''init
         Set up our Actor's attributes and function call, crete the actor
@@ -31,11 +35,11 @@ class EoAActor(Actor):
         
         '''Extend Actor'''
         #Call the panda3d actor init
-        modelLocation = "models/%s" % (modelName)
+        modelLocation = self.targetDir + "/models/%s" % (modelName)
         try:
             if not modelStates:
-                modelStates = {"run":"models/%s-run" % (modelName),
-                           "walk":"models/%s-walk" % (modelName)}
+                modelStates = {"run":self.targetDir + "/models/%s-run" % (modelName),
+                               "walk":self.targetDir + "/models/%s-walk" % (modelName)}
             else:
                 modelStates = modelStates
         except:
@@ -87,7 +91,7 @@ class EoAActor(Actor):
         self.body[location] = self.exposeJoint(None, 'modelRoot', modelLocation)
         
         #Create the initial model configuration
-        modelSetup = ("models/%s" % (item), itemPos, itemHpr, 1)
+        modelSetup = (self.targetDir + "/models/%s" % (item), itemPos, itemHpr, 1)
         
         #Configure the model
         model = loader.loadModel(modelSetup[0]) #load the model 
