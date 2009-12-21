@@ -2,6 +2,9 @@
 End of Ages
 
 """
+"""System Imports"""
+import sys, math, os
+from random import random
 
 """Panda Module imports"""
 from pandac.PandaModules import *
@@ -24,11 +27,11 @@ from direct.gui.DirectGui import *
 from direct.interval.IntervalGlobal import *
 from direct.filter.CommonFilters import CommonFilters
 
-import sys, math, os
-from random import random
+
+from EoALib import *
 
 
-class Universe(DirectObject):
+class Universe(DirectObject, EoAUniverse):
     """Universe
     -----------
     Out main class, the Universe"""
@@ -64,17 +67,27 @@ class Universe(DirectObject):
   
         """Set up camera"""
         self.init_camera()
+        
+
         """--------------------------------------------------------"""
         
         """------------TASKS---------------------------------------"""
+        self.elapsed = 0.0
+        
         """Set up tasks"""
         #Set up movement update
         base.taskMgr.add(self.update_movement, 'update_movement')
         
         #Set up camera update
         base.taskMgr.add(self.update_camera, 'update_camera')
+        
+        #Keep track of entities, update animation if they are moving
+        base.taskMgr.add(self.update_entity_animations, 'update_entity_animations')
+        
+        #Setup mouse collision test
+        base.taskMgr.add(self.update_mouse_collisions, 'update_mouse_collisions')
         """--------------------------------------------------------"""
-    
+
     """=======Controls=========
         CONTROLS SETUP
         ======================="""
@@ -127,18 +140,11 @@ class Universe(DirectObject):
         self.accept("mouse2", self.controls_set_key, ["mouse2", 1])
         self.accept("mouse2-up", self.controls_set_key, ["mouse2", 0])
         base.accept ('escape', sys.exit)  # hit escape to quit!
-    
+        
     def controls_set_key(self, key, value):
         """Set up keyboard keys"""
         self.controls['key_map'][key] = value
         
-    """=======Environment======
-        ENVIRONMENT SETUP
-        ======================="""
-    def init_environment(self):
-        # Load an environment we can run around in
-        self.environment = loader.loadModel('models/world')
-        self.environment.reparentTo(render)
     
     """=======Lights===========
         LIGHTS SETUP
@@ -157,12 +163,16 @@ class Universe(DirectObject):
         
         # Create a simple directional light
         self.lights = {}
+        
+        #Set up directional light
         self.lights['dlight'] = render.attachNewNode (DirectionalLight\
                                 ('DirectionalLight'))
         self.lights['dlight'].setColor(VBase4(1, 1, 1, 1))
         render.setLight(self.lights['dlight'])
         self.lights['dlight'].setPos(1, 1, 1)
         self.lights['dlight'].lookAt(0, 0, 0)
+        
+        #Sun position
         self.lights['sunPos'] = 0
         # Create an ambient light
         self.lights['alight'] = AmbientLight('AmbientLight')
@@ -170,86 +180,9 @@ class Universe(DirectObject):
         self.lights['alnp'] = render.attachNewNode(self.lights['alight'])
         render.setLight(self.lights['alnp'])
     
-    """=======Physics==========
-        PHYSICS SETUP
-        ======================="""
-    def init_physics(self):
-        """init_physics
-        Set up the physics"""
-
-        # Turn on particles, required to use Panda physics
-        base.enableParticles()
+        #self.shader = loader.loadShader("g.sha")
+        #render.setShader(self.shader)
         
-        """Assign some masks
-       Purpose: We'll use masks to check for collisions for different objects
-       
-       We're going to create a self.physics dictionary that will store things
-       related to the physics system, including bit masks, gravity settings,
-       etc.
-       """
-
-        #Create a dictionary to store various physics settings
-        self.physics = {'collisions': \
-                            {'bit_masks': \
-                                {'bit_values':{}} \
-                            }, \
-                        'gravity':{} \
-                        }
-        
-        """Set up some bit masks"""        
-        #bit_values is a dictionatary containing bit values for 
-        #various bit masks
-        self.physics['collisions']['bit_masks']['bit_values']['floor'] = 1
-        self.physics['collisions']['bit_masks']['bit_values']['wall'] = 2
-        self.physics['collisions']['bit_masks']['bit_values']['sphere'] = 3
-        self.physics['collisions']['bit_masks']['bit_values']['player'] = 4
-
-        #Set up the floor mask
-        self.physics['collisions']['bit_masks']['floor'] = BitMask32()
-        self.physics['collisions']['bit_masks']['floor'].setBit(self.physics\
-                            ['collisions']['bit_masks']['bit_values']['floor'])
-
-        #Set up the wall mask
-        self.physics['collisions']['bit_masks']['wall'] = BitMask32()
-        self.physics['collisions']['bit_masks']['wall'].setBit(self.physics\
-                            ['collisions']['bit_masks']['bit_values']['wall'])
-        self.physics['collisions']['bit_masks']['wall'].setBit(self.physics\
-                            ['collisions']['bit_masks']['bit_values']['floor'])
-        
-        """Set up Gravity""" 
-        self.physics['gravity']['gravity_FN'] = ForceNode('globalGravityForce')
-        self.physics['gravity']['gravity_NP'] = render.attachNewNode(
-                            self.physics['gravity']['gravity_FN'])
-        #Set the force of gravity.  We'll use Earth's
-        self.physics['gravity']['g_force'] = LinearVectorForce(0, 0, -9.81)
-        
-        #Set constant acceleration
-        self.physics['gravity']['g_force'].setMassDependent(False)
-        self.physics['gravity']['gravity_FN'].addForce(self.physics['gravity']\
-                            ['g_force'])
-        
-        # add it to the built-in physics manager
-        base.physicsMgr.addLinearForce(self.physics['gravity']['g_force'])
-        
-    """=======collisions========
-        COLLISON SETUP
-        ======================="""
-    def init_collisions(self):
-        """Set up collisions"""
-        # Create a basic collision traverser
-        self.physics['collisions']['cTrav'] = CollisionTraverser()
-        
-        """Set collisions for objects"""
-        # Turn on collisions for all the objects named Ground and Rock
-        # Everything else we leave invisible to collisions
-        for ground in self.environment.findAllMatches ('**/Ground*'):
-            ground.setCollideMask(BitMask32().bit(self.physics['collisions']\
-                            ['bit_masks']['floor']))
-        
-        for rock in self.environment.findAllMatches ('**/Rock*'):
-            rock.setCollideMask(self.physics['collisions']['bit_masks']\
-                            ['wall'])
-    
     """=======Actors===========
         ACTOR SETUP
         ======================="""
@@ -257,77 +190,16 @@ class Universe(DirectObject):
         """init_actors
         Setup actors"""
         #Create a dictionary to hold all our actors
-        self.entities = {'PC':{}} 
+        self.entities = {} 
         
-        self.entities['PC']['Actor'] = Actor()
-        self.entities['PC']['Actor'].loadModel('models/boxman')
-        self.entities['PC']['Actor'].loadAnims({'idle' : 'models/boxman-idle'})
-        self.entities['PC']['Actor'].loadAnims({'walk' : 'models/boxman-walk'})
-
-        # start our walking animation
-        self.entities['PC']['Actor'].loop('walk')
-
-        self.entities['PC']['Actor'].setPos(0, 0, 5)
-        self.entities['PC']['Actor'].reparentTo(render)
-        
-        # Create a GravityWalker and let's set some defaults
-        #Create an empty dictionary to store physics for actors
-        self.physics['actor_physics'] = {}
-        self.physics['actor_physics']['playerWalker'] = GravityWalker()
-        
-        self.physics['actor_physics']['playerWalker'].setAvatar(\
-                        self.entities['PC']['Actor'])
-        self.physics['actor_physics']['playerWalker'].setWalkSpeed(forward=5,\
-                        jump=15, reverse=4, rotate=90)
-                        
-        self.physics['actor_physics']['playerWalker'].setWallBitMask( \
-                        BitMask32().bit( \
-                        self.physics['collisions']['bit_masks']['bit_values']
-                        ['wall']))
-                        
-        self.physics['actor_physics']['playerWalker'].setFloorBitMask(\
-                        BitMask32().bit(self.physics['collisions']\
-                        ['bit_masks']['bit_values']['floor']))
-                        
-        self.physics['actor_physics']['playerWalker'].initializeCollisions(
-                        self.physics['collisions']['cTrav'], 
-                        self.entities['PC']['Actor'], avatarRadius=0.5,
-                        floorOffset=0.1, reach=0.5)
-                        
-        self.physics['actor_physics']['playerWalker'].enableAvatarControls()
-        self.physics['actor_physics']['playerWalker'].placeOnFloor()
-
-        # By setting the wall sphere to a player bitmask, we can have spheres 
-        #we created above react against the player, since they are using a
-        #CollisionPusherHandler
-        self.physics['actor_physics']['playerWalker'].cWallSphereNodePath.\
-                    setCollideMask(BitMask32().bit(self.physics['collisions']\
-                    ['bit_masks']['bit_values']['player']))  
-    
-        """Name above head"""
-        self.chatTextParent=aspect2d.attachNewNode('chat text dummy')
-        self.chatDL = DirectLabel(parent=self.chatTextParent,
-                    frameColor=(0,0,0,0),
-                    text_fg=(1,1,1,1), 
-                    #text_shadow=(0,0,0,1),
-                    text_align=TextNode.ACenter,
-                    text='Your Name', # the name
-                    text_pos=(0,-1.2),
-                    )
-        self.chatTextParent.setZ(-5)
-        self.chatTextOutputParent = self.entities['PC']['Actor'].attachNewNode(
-                    'chat text dummy')
-        self.chatTextOutput = self.chatDL.instanceUnderNode(
-                    self.chatTextOutputParent, 'chat text')
-        self.chatTextOutput.setScale(.5)
-        self.chatTextOutput.setZ(self.entities['PC']['Actor'].getTightBounds()\
-                    [1][2]-2.2) # put it above smiley
-        self.chatTextOutputParent.setBillboardPointEye()
-        self.chatTextPos = self.entities['PC']['Actor'].exposeJoint(None, 
-                    'modelRoot', 'Head')
-        self.chatTextOutputParent.setPos(self.chatTextPos.getPos()[0],
-                    self.chatTextPos.getPos()[1],
-                    self.chatTextPos.getPos()[2] - 2)
+        #Setup the PC entity
+        self.entities['PC'] = Entity(gravity_walker=True,modelName="boxman", 
+                                    name='PC', startPos=(0,0,5))
+               
+        for i in range(10):
+            self.entities['NPC_'+str(i)] = Entity(modelName="boxman", 
+                        name='NPC_'+str(i),startPos=(random()*i+i,
+                                                    random()*i+i,30))
         
     """=======Camera===========
         CAMERA SETUP
@@ -337,9 +209,9 @@ class Universe(DirectObject):
         Set up the camera.  Allow for camera autofollow, freemove, etc"""
         
         base.disableMouse()
-        base.camera.reparentTo(self.entities['PC']['Actor'])
+        base.camera.reparentTo(self.entities['PC'].Actor)
         base.camera.setPos(0, -15, 25)
-        base.camera.lookAt(self.entities['PC']['Actor'])
+        base.camera.lookAt(self.entities['PC'].Actor)
         angledegrees = 2
         angleradians = angledegrees * (math.pi / 180.0)
         base.camera.setPos(20*math.sin(angleradians),-20.0*\
@@ -363,25 +235,22 @@ class Universe(DirectObject):
         """
         
         # Adjust to match the walkcycle, to minimize sliding
-        self.entities['PC']['Actor'].setPlayRate(0.5 * \
-                            self.physics['actor_physics']\
-                            ['playerWalker'].speed, 'walk') 
+        self.entities['PC'].Actor.setPlayRate(0.5 * \
+                            self.entities['PC'].physics['playerWalker'].speed, 
+                            'walk') 
         
         #Check if the player is moving.  If so, play walk animation
         if inputState.isSet('forward') or inputState.isSet('reverse') or \
            inputState.isSet('turnLeft') or inputState.isSet('turnRight'):
             if self.controls['isMoving'] is False:
-                print 'moving'
-                #self.entities['PC']['Actor'].stop()
-                self.entities['PC']['Actor'].loop('walk')
+                self.entities['PC'].Actor.loop('walk')
                 self.controls['isMoving'] = True
         else:
             if self.controls['isMoving']:
                 print 'stopped'
-                self.entities['PC']['Actor'].stop()
-                self.entities['PC']['Actor'].loop('idle')
+                self.entities['PC'].Actor.stop()
+                self.entities['PC'].Actor.loop('idle')
                 self.controls['isMoving'] = False
-        
         #Done here
         return Task.cont
     
@@ -391,9 +260,9 @@ class Universe(DirectObject):
     def update_camera(self,task):
         """Check for camera control input and update accordingly"""
         
-        # Get the time elapsed since last frame. We need this
+        # Get the time self.elapsed since last frame. We need this
         # for framerate-independent movement.
-        elapsed = globalClock.getDt()
+        self.elapsed = globalClock.getDt()
         
         """Rotate Camera left / right"""
         if (self.controls['key_map']['cam_left']!=0):
@@ -427,22 +296,106 @@ class Universe(DirectObject):
         """Zoom camera in / out"""
         if (self.controls['key_map']['cam_up']!=0):          
             #Zoom in
-            base.camera.setY(base.camera, +(elapsed*20))
+            base.camera.setY(base.camera, +(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] -= 1
                   
         if (self.controls['key_map']['cam_down']!=0): 
             #Zoom out
-            base.camera.setY(base.camera, -(elapsed*20))
+            base.camera.setY(base.camera, -(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] += 1
             print self.controls['camera_settings']['zoom']
-            
-        self.lights['sunPos'] += 1
+        
+        #Update the Sun's position.
+        #TODO - tie this in with day/night/time system
+        self.lights['sunPos'] += .2
         #Move the sun
         self.lights['dlight'].setHpr(0,self.lights['sunPos'],0)
         #Finish
+        #self.entities['PC'].physics['playerWalker'].getCollisionsActive()
         return Task.cont
     
+    """=======update_entity_animations
+        UPDATE ENTITY ACTOR ANIMATIONS
+        ======================="""
+    def update_entity_animations(self, task):
+        '''Check to see if any entities have moved since the last check
+        If entity d(xyz) has changed, play animation'''
+        
+        #Loop through all entities
+        for i in self.entities:
+            if i != "PC":
+                #Get the entity's current position
+                test_pos = self.entities[i].getPos()
+                #Turn it into an integer for checking
+
+                test_pos_int = [float("%.2f" % j) for j in test_pos]
+
+                #See if the current position matches the previous position
+                if test_pos_int != self.entities[i].prevPos:
+                    #Check to see if the entity has been moving
+                    if self.entities[i].is_moving is False and \
+                        self.entities[i].moving_buffer > 20:
+                        #Play the walk animation
+                        self.entities[i].Actor.loop('walk')
+                        
+                        #The entity is moving now
+                        self.entities[i].is_moving = True
+                        
+                        #Reset the moving buffer
+                        self.entities[i].moving_buffer = 0
+                    #Increment the moving buffer by one to help reduce 
+                    #skittering
+                    self.entities[i].moving_buffer += 1
+                else:
+                    #else, the previous and current position is the same
+                    if self.entities[i].is_moving:
+                        #Check to see if entity is set as moving to ensure we
+                        #don't do this loop the idle animation every frame
+                        self.entities[i].Actor.stop()
+                        self.entities[i].Actor.loop('idle')
+                        self.entities[i].is_moving = False
+                  
+                #Set the entity's previous position
+                self.entities[i].prevPos = test_pos_int
+                
+ 
+        '''to update NPC's location
+            pos = self.entities['NPC_0'].physics['sphereActor'].getPos()
+            self.entities['NPC_0'].physics['sphereActor'].setPos(pos[0],pos[1],pos[2])
+        '''
+        return Task.cont
+        
+        
+    """=======update_mouse_collisions=
+        UPDATE COLLISIONS FROM MOUSE
+        ======================="""       
+    def update_mouse_collisions(self, task):          
+        #Check to see if we can access the mouse. We need it to do anything else
+        if base.mouseWatcherNode.hasMouse():
+            #get the mouse position
+            mpos = base.mouseWatcherNode.getMouse()
+
+            #Set the position of the ray based on the mouse position
+            self.physics['collisions']['picker_ray'].setFromLens(base.camNode, 
+                mpos.getX(), mpos.getY())
+
+            #Do the actual collision pass (Do it only on the squares for
+            #efficiency purposes)
+            base.cTrav.traverse(EoAUniverse.nodes['entity_root'])        
+             
+            #assume for simplicity's sake that myHandler is a CollisionHandlerQueue
+            if self.physics['collisions']['mouse_cHandler'].getNumEntries() > 0:
+                self.physics['collisions']['mouse_cHandler'].sortEntries() #this is so we get the closest object
+                pickedObj=self.physics['collisions']['mouse_cHandler'].getEntry(0).getIntoNodePath()
+                pickedObj=pickedObj.findNetTag('myObjectTag')
+            try:
+                if not pickedObj.isEmpty():
+                    #handlePickedObject(pickedObj)
+                    print pickedObj
+            except:
+                pass
+        return Task.cont
 game = Universe()
 run()
