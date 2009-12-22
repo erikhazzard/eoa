@@ -30,6 +30,10 @@ from direct.filter.CommonFilters import CommonFilters
 
 from EoALib import *
 
+"""Set target directory"""
+target_dir = os.path.abspath(sys.path[0])
+target_dir = Filename.fromOsSpecific(target_dir).getFullpath()
+
 
 class Universe(DirectObject, EoAUniverse):
     """Universe
@@ -68,12 +72,37 @@ class Universe(DirectObject, EoAUniverse):
         """Set up camera"""
         self.init_camera()
         
+        """GUI"""
+        #imageObject = OnscreenImage(image = target_dir + '/gui/target_box.png', pos = (1, .4, .9))
+        #imageObject.setScale(.3)
+        #imageObject.setTransparency(TransparencyAttrib.MAlpha)
+        
+        #create egg
+        #egg-texture-cards -o button_maps.egg -p 240,240 button_ready.png button_click.png button_rollover.png button_disabled.png
 
+        #Create empty GUI dict
+        self.GUI = {'target_box':{}}
+        
+        self.GUI['target_box']['node_path'] = loader.loadModel(target_dir+\
+            '/gui/target_box.egg')
+        self.GUI['target_box']['node_path'].reparentTo(aspect2d)
+        self.GUI['target_box']['node_path'].setTransparency(1)
+        self.GUI['target_box']['node_path'].setAlphaScale(1)
+        self.GUI['target_box']['node_path'].setScale(.5)
+        self.GUI['target_box']['node_path'].setPos(.92,.92,.92)
+        
+        self.GUI['target_text'] = OnscreenText(parent=\
+            self.GUI['target_box']['node_path'], text = '', pos=(0,-.072), 
+            scale=0.1,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
         """--------------------------------------------------------"""
+        
+        
+        """Set up skydome"""
+        #self.init_skydome()
         
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
-        
+        self.prev_time = 0.0
         """Set up tasks"""
         #Set up movement update
         base.taskMgr.add(self.update_movement, 'update_movement')
@@ -86,11 +115,17 @@ class Universe(DirectObject, EoAUniverse):
         
         #Setup mouse collision test
         base.taskMgr.add(self.update_mouse_collisions, 'update_mouse_collisions')
+        
+        #Skydome task
+        #base.taskMgr.add(self.cameraUpdated, "camupdate")
         """--------------------------------------------------------"""
 
-    """=======Controls=========
-        CONTROLS SETUP
-        ======================="""
+    """------------------initial setup functions-------------------------------
+                                                                       
+                         INITIAL SETUP FUNCTIONS                         
+                                                                       
+        --------------------------------------------------------------------"""
+    """=======Controls============================================="""
     def init_controls(self):
         """Set up controls.  Use direct input and keymaps
         """
@@ -132,6 +167,7 @@ class Universe(DirectObject, EoAUniverse):
         #mouse keys
         #mouse1 is left click
         self.accept("mouse1", self.controls_set_key, ["mouse1", 1])
+        self.accept("mouse1", self.setTarget)       #left-click grabs a piece
         self.accept("mouse1-up", self.controls_set_key, ["mouse1", 0])
         #mouse3 is right click
         self.accept("mouse3", self.controls_set_key, ["mouse3", 1])
@@ -146,20 +182,18 @@ class Universe(DirectObject, EoAUniverse):
         self.controls['key_map'][key] = value
         
     
-    """=======Lights===========
-        LIGHTS SETUP
-        ======================="""
+    """=======Lights==============================================="""
     def init_lights(self):
         """init_lights
         Set up light system
         """
         self.filters = CommonFilters(base.win, base.cam)
-        filterok = self.filters.setBloom(blend=(0,0,0,1), desat=-0.5, 
+        filterok = self.filters.setBloom(blend=(0,0,0,.5), desat=-0.5, 
                         intensity=1.0, size="small")
         if (filterok == False):
             print "Your video card cannot handle this"
             return
-        self.glowSize=.1
+        self.glowSize=.2
         
         # Create a simple directional light
         self.lights = {}
@@ -174,18 +208,17 @@ class Universe(DirectObject, EoAUniverse):
         
         #Sun position
         self.lights['sunPos'] = 0
+        
         # Create an ambient light
         self.lights['alight'] = AmbientLight('AmbientLight')
-        self.lights['alight'].setColor(VBase4(0.5, 0.5, 0.5, 0.2))
+        self.lights['alight'].setColor(VBase4(0.5, 0.5, 0.5, 0.1))
         self.lights['alnp'] = render.attachNewNode(self.lights['alight'])
         render.setLight(self.lights['alnp'])
     
         #self.shader = loader.loadShader("g.sha")
         #render.setShader(self.shader)
         
-    """=======Actors===========
-        ACTOR SETUP
-        ======================="""
+    """=======Actors==============================================="""
     def init_actors(self):
         """init_actors
         Setup actors"""
@@ -196,14 +229,12 @@ class Universe(DirectObject, EoAUniverse):
         self.entities['PC'] = Entity(gravity_walker=True,modelName="boxman", 
                                     name='PC', startPos=(0,0,5))
                
-        for i in range(10):
+        for i in range(25):
             self.entities['NPC_'+str(i)] = Entity(modelName="boxman", 
                         name='NPC_'+str(i),startPos=(random()*i+i,
-                                                    random()*i+i,30))
+                                                    random()*i+i,100))
         
-    """=======Camera===========
-        CAMERA SETUP
-        ======================="""
+    """=======Camera==============================================="""
     def init_camera(self):
         """init_camera
         Set up the camera.  Allow for camera autofollow, freemove, etc"""
@@ -224,12 +255,34 @@ class Universe(DirectObject, EoAUniverse):
         #to control the camera
         self.controls['camera_settings']['timer'] = 0
         self.controls['camera_settings']['zoom'] = 20
-        
-        
-    """------------------TASKS--------------------------------------------"""
-    """=======update_movement==
-        UPDATE CHARACTER MOVEMENT
-        ======================="""
+     
+    """=======Skydome=============================================="""
+    def init_skydome(self):
+        #SKYBOX
+        self.skybox = loader.loadModel(target_dir+'/models/dome2')
+        self.skybox.reparentTo(render)
+        self.skybox.setScale(4000,4000,1000)
+        #self.skybox.setLightOff()
+        texturefile = target_dir + "/models/textures/clouds_bw.png"
+        texture = loader.loadTexture(texturefile)
+        self.textureStage0 = TextureStage("stage0")
+        self.textureStage0.setMode(TextureStage.MReplace)
+        self.skybox.setTexture(self.textureStage0,texture,1)
+        self.rate = Vec4(0.004, 0.002, 0.008, 0.010)
+        self.textureScale = Vec4(1,1,1,1)
+        self.skycolor = Vec4(.1, .1, .1, 0)
+        self.skybox.setShader( loader.loadShader(target_dir+\
+            '/shaders/skydome2.sha' ) )
+        self.skybox.setShaderInput("sky", self.skycolor)
+        self.skybox.setShaderInput("clouds", self.rate)
+        self.skybox.setShaderInput("ts", self.textureScale)
+
+    """-----------------tasks--------------------------------------------------
+                                                                       
+                        TASKS                        
+                                                                       
+        --------------------------------------------------------------------"""
+    """=======Update character movement============================"""
     def update_movement(self,task):
         """Task that updates the walking animation on our GravityWalker
         """
@@ -254,9 +307,7 @@ class Universe(DirectObject, EoAUniverse):
         #Done here
         return Task.cont
     
-    """=======update_camera=
-        UPDATE CAMERA
-        ======================="""
+    """======Update camera========================================="""
     def update_camera(self,task):
         """Check for camera control input and update accordingly"""
         
@@ -309,19 +360,17 @@ class Universe(DirectObject, EoAUniverse):
         
         #Update the Sun's position.
         #TODO - tie this in with day/night/time system
-        self.lights['sunPos'] += .2
+        self.lights['sunPos'] += .5
         #Move the sun
         self.lights['dlight'].setHpr(0,self.lights['sunPos'],0)
         #Finish
         #self.entities['PC'].physics['playerWalker'].getCollisionsActive()
         return Task.cont
     
-    """=======update_entity_animations
-        UPDATE ENTITY ACTOR ANIMATIONS
-        ======================="""
+    """=======update_entity_animations============================="""
     def update_entity_animations(self, task):
-        '''Check to see if any entities have moved since the last check
-        If entity d(xyz) has changed, play animation'''
+        """Check to see if any entities have moved since the last check
+        If entity d(xyz) has changed, play animation"""
         
         #Loop through all entities
         for i in self.entities:
@@ -361,41 +410,209 @@ class Universe(DirectObject, EoAUniverse):
                 self.entities[i].prevPos = test_pos_int
                 
  
-        '''to update NPC's location
-            pos = self.entities['NPC_0'].physics['sphereActor'].getPos()
-            self.entities['NPC_0'].physics['sphereActor'].setPos(pos[0],pos[1],pos[2])
-        '''
+        """to update NPC's location
+            pos = self.entities['NPC_0'].getPos()
+            self.entities['NPC_0'].setPos(x,y,z)
+        """
         return Task.cont
         
         
-    """=======update_mouse_collisions=
-        UPDATE COLLISIONS FROM MOUSE
-        ======================="""       
-    def update_mouse_collisions(self, task):          
-        #Check to see if we can access the mouse. We need it to do anything else
+    """=======update_mouse_collisions=============================="""       
+    def update_mouse_collisions(self, task):    
+        """Handle muse collisions for hover and click"""
+        
+        #TODO - optimize? Does this provide an advatge?
+        #Task.time returns a float with many digits, so doing all these checks
+        #per iteration is a little time consuming. Let's compare only the first
+        #digit of task.time to see if we should do the mouse collisions checks
+        #or not.  Since the timing does not have to be 100% perfect as we're
+        #checking for mouse interactions, we can afford not to be as exact
+        #as possible.  Need to check if following test saves any FPS
+         
+        #normal test
+        #if self.prev_time != task.time:
+        
+        #optimized test
+        #if float("%.1f" % self.prev_time) != float("%.1f" % task.time):
+        
+        
+        #Check to see if we can access the mouse
         if base.mouseWatcherNode.hasMouse():
             #get the mouse position
             mpos = base.mouseWatcherNode.getMouse()
 
             #Set the position of the ray based on the mouse position
-            self.physics['collisions']['picker_ray'].setFromLens(base.camNode, 
-                mpos.getX(), mpos.getY())
+            self.physics['collisions']['mouse']['picker_ray'].setFromLens(\
+                base.camNode, mpos.getX(), mpos.getY())
 
             #Do the actual collision pass (Do it only on the squares for
             #efficiency purposes)
             base.cTrav.traverse(EoAUniverse.nodes['entity_root'])        
-             
-            #assume for simplicity's sake that myHandler is a CollisionHandlerQueue
-            if self.physics['collisions']['mouse_cHandler'].getNumEntries() > 0:
-                self.physics['collisions']['mouse_cHandler'].sortEntries() #this is so we get the closest object
-                pickedObj=self.physics['collisions']['mouse_cHandler'].getEntry(0).getIntoNodePath()
-                pickedObj=pickedObj.findNetTag('myObjectTag')
-            try:
-                if not pickedObj.isEmpty():
-                    #handlePickedObject(pickedObj)
-                    print pickedObj
-            except:
-                pass
+            
+            #Get number of entries in the collision handler
+            if self.physics['collisions']['mouse']['cHandler'].\
+                getNumEntries() > 0:
+                #Get the closest object
+                self.physics['collisions']['mouse']['cHandler'].sortEntries()
+                #Store the picked object
+                self.physics['collisions']['mouse']['current_node'] = self.\
+                    physics['collisions']['mouse']['cHandler'].\
+                    getEntry(0).getIntoNodePath()
+                self.physics['collisions']['mouse']['current_node'] = self.\
+                    physics['collisions']['mouse']['current_node'].\
+                    findNetTag('mouse_obj_tag')
+                
+                try:
+                    if not self.physics['collisions']['mouse']\
+                    ['current_node'].isEmpty():
+                        #Get the entity from the python tag
+                        """Check for mouse hopping from object to object,
+                        mouse might hover over NPC_1 to NPC_2.  If we don't
+                        check for this, a node may stay highlighted if the 
+                        mouse collides from NPC to NPC"""
+                        
+                        #Check if the current picked object is equal to the 
+                        #previous picked object (and that it isn't none)
+                        if self.physics['collisions']['mouse']['prev_node'] !=\
+                        self.physics['collisions']['mouse']['current_node'] \
+                        and self.physics['collisions']['mouse']\
+                        ['prev_node'] is not None:
+                            #Turn off the highlight light
+                            self.physics['collisions']['mouse']['prev_node'].\
+                                setLightOff()
+                            
+                            #Turn back on the default lights
+                            self.physics['collisions']['mouse']['prev_node'].\
+                                setLight(self.lights['alnp'])
+                            self.physics['collisions']['mouse']['prev_node'].\
+                                setLight(self.lights['dlight'])
+                            #We don't set the previously picked node object 
+                            #here because we don't want to set the previous
+                            #node to the current node if the previous node
+                            #is equal to none
+                            
+                        """If the hovered over node is not the curret node,
+                        set light"""
+                        #Add an effect
+                        #Create an ambient light so the name node will be 
+                        #one uniform light
+                        ambient = AmbientLight('ambient')
+                        ambient.setColor(Vec4(.5,.7,.7,.1))
+                        ambientNP = self.physics['collisions']['mouse']\
+                            ['current_node'].attachNewNode(\
+                            ambient.upcastToPandaNode())
+                         
+                        # If we did not call setLightOff() first, the green 
+                        #light would add to the total set of lights on this 
+                        #object.  Since we do call setLightOff(), we are 
+                        #turning off all the other lights on this object first,
+                        #and then turning on only the green light.
+                        self.physics['collisions']['mouse']['current_node'].\
+                            setLightOff()
+                        self.physics['collisions']['mouse']['current_node'].\
+                            setLight(ambientNP)
+                        
+                        #We set the highlighting for the moused over node, 
+                        #now set the previous node to the current selected node
+                        if self.physics['collisions']['mouse']['prev_node'] !=\
+                        self.physics['collisions']['mouse']['current_node']:
+                            self.physics['collisions']['mouse']['prev_node'] =\
+                            self.physics['collisions']['mouse']['current_node']
+                        
+                except:
+                    print "Error on mouse over node " + str(self.physics\
+                        ['collisions']['mouse']['current_node'])
+            else:
+                #The mouse isn't over anything, check to see if the previous
+                #node is set
+                if self.physics['collisions']['mouse']['prev_node'] \
+                is not None:
+                    if self.entities['PC'].target != \
+                    self.physics['collisions']['mouse']['prev_node'].\
+                        getPythonTag('entity'):
+                    #Turn off the highlight light
+                        self.physics['collisions']['mouse']['prev_node'].\
+                        setLightOff()
+                    
+                        #Turn back on the default lights
+                        self.physics['collisions']['mouse']['prev_node'].\
+                            setLight(self.lights['alnp'])
+                        self.physics['collisions']['mouse']['prev_node'].\
+                            setLight(self.lights['dlight'])
+                        
+                    #Set the previous node to none
+                    self.physics['collisions']['mouse']['prev_node'] = None
+                    
+                self.physics['collisions']['mouse']['current_node'] = None
+        #self.prev_time = task.time
         return Task.cont
+    
+    """=======Update skybox========================================"""
+    def cameraUpdated(self, task):
+        render.setShaderInput('time', task.time)
+        return Task.cont
+        
+         
+    """-----------------EoA Universe Functions---------------------------------
+                                                                       
+                        EoA Universe Functions                       
+                                                                       
+        --------------------------------------------------------------------"""   
+    """=======Set PC's target======================================"""
+    def setTarget(self):
+        #if self.physics['collisions']['mouse']['prev_node'] is not None:
+        #    print self.physics['collisions']['mouse']['prev_node']
+        if self.physics['collisions']['mouse']['current_node'] is not None:
+            picked_entity = self.physics['collisions']['mouse']\
+                ['current_node'].getPythonTag('entity')
+            #print 'clicked' + str(picked_entity.name)
+            self.entities['PC'].target = picked_entity
+            
+            if self.physics['collisions']['mouse']['prev_target'] is not None \
+            and self.physics['collisions']['mouse']['prev_target'] != \
+            self.physics['collisions']['mouse']['current_node']:
+                self.physics['collisions']['mouse']['prev_target'].\
+                setLightOff()
+            
+                #Turn back on the default lights
+                self.physics['collisions']['mouse']['prev_target'].\
+                    setLight(self.lights['alnp'])
+                self.physics['collisions']['mouse']['prev_target'].\
+                    setLight(self.lights['dlight'])
+
+            #Set previous target to the current node (set the last clicked on
+            #node equal to the node the mouse is over)
+            self.physics['collisions']['mouse']['prev_target'] = \
+                self.physics['collisions']['mouse']['current_node']
+          
+            #Update target box text
+            self.GUI['target_text'].setText(self.entities['PC'].target.name)
+            
+        else:
+            """No entities are under the click, so clear the target and any
+            lighting on the previously selected node"""
+            
+            try:
+                #Turn off the previous selected node's lights
+                self.physics['collisions']['mouse']['prev_target'].\
+                    setLightOff()
+                
+                #Turn back on the default lights
+                self.physics['collisions']['mouse']['prev_target'].\
+                    setLight(self.lights['alnp'])
+                self.physics['collisions']['mouse']['prev_target'].\
+                    setLight(self.lights['dlight'])
+            except:
+                print "Could not turn off node's lighting"
+                
+            #Clear the PC's current target
+            self.entities['PC'].target = None
+            
+            #Clear the target text
+            """TODO create a setTarget method that updates targetbox"""
+            self.GUI['target_text'].setText("")
+"""------------------------------------------------------------------------"""
+
+"""Instantiate the universe and call the built in Panda3d run() function""" 
 game = Universe()
 run()

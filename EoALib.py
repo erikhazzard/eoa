@@ -1,9 +1,9 @@
-'''EoA
+"""EoA
 End of Ages
 
 This file contains the majority EoA's library classes and functions
 
-'''
+"""
 """System Imports"""
 import sys, math, os
 from random import random
@@ -22,15 +22,15 @@ from direct.gui.DirectGui import *
 from direct.interval.IntervalGlobal import *
 from direct.filter.CommonFilters import CommonFilters
 
-'''Set target directory'''
+"""Set target directory"""
 targetDir = os.path.abspath(sys.path[0])
 targetDir = Filename.fromOsSpecific(targetDir).getFullpath()
 
 
 DEBUG = False
-'''---------------------------------------------------------------------------
+"""---------------------------------------------------------------------------
     Universe Functions
-    -----------------------------------------------------------------------'''    
+    -----------------------------------------------------------------------"""    
 class EoAUniverse(DirectObject):
     #Set up the physics
     physics = {'collisions': \
@@ -127,55 +127,62 @@ class EoAUniverse(DirectObject):
         # Turn on collisions for all the objects named Ground and Rock
         # Everything else we leave invisible to collisions
         for ground in EoAUniverse.environment.findAllMatches('**/Ground*'):
-            ground.setCollideMask(BitMask32().bit(EoAUniverse.physics['collisions']\
-                            ['bit_masks']['bit_values']['floor']))
+            ground.setCollideMask(BitMask32().bit(EoAUniverse.physics\
+                ['collisions']['bit_masks']['bit_values']['floor']))
         
         for rock in EoAUniverse.environment.findAllMatches('**/Rock*'):
             rock.setCollideMask(EoAUniverse.physics['collisions']['bit_masks']\
-                            ['bit_values']['wall'])
+                ['bit_values']['wall'])
         
-        '''Init Mouse collision controler'''
+        """Init Mouse collision controler"""
         #setup our collision handler queue
-        self.physics['collisions']['mouse_cHandler'] = CollisionHandlerQueue()
+        self.physics['collisions']['mouse'] = {}
+        self.physics['collisions']['mouse']['prev_node'] = None
+        self.physics['collisions']['mouse']['current_node'] = None
+        self.physics['collisions']['mouse']['prev_target'] = None
+        
+        self.physics['collisions']['mouse']['cHandler'] = \
+                CollisionHandlerQueue()
 
-        self.physics['collisions']['mouse_picker_node'] = \
+        self.physics['collisions']['mouse']['picker_node'] = \
                 CollisionNode('mouseRay')
         
-        self.physics['collisions']['mouse_picker_np'] = \
+        self.physics['collisions']['mouse']['picker_node_path'] = \
                 base.camera.attachNewNode(self.physics['collisions']\
-                ['mouse_picker_node'])
+                ['mouse']['picker_node'])
         
-        self.physics['collisions']['mouse_picker_node'].setFromCollideMask(\
+        self.physics['collisions']['mouse']['picker_node'].setFromCollideMask(\
                 GeomNode.getDefaultCollideMask())
         
-        self.physics['collisions']['picker_ray']=CollisionRay()
+        self.physics['collisions']['mouse']['picker_ray']=CollisionRay()
         
-        self.physics['collisions']['mouse_picker_node'].addSolid(\
-                self.physics['collisions']['picker_ray'])
+        self.physics['collisions']['mouse']['picker_node'].addSolid(\
+                self.physics['collisions']['mouse']['picker_ray'])
         
-        base.cTrav.addCollider(self.physics['collisions']['mouse_picker_np'],
-                self.physics['collisions']['mouse_cHandler'])
+        base.cTrav.addCollider(self.physics['collisions']['mouse']\
+                ['picker_node_path'],
+                self.physics['collisions']['mouse']['cHandler'])
                 
-        '''Show collisions if debug'''
+        """Show collisions if debug"""
         if DEBUG:
             base.cTrav.showCollisions(render)
 
-'''---------------------------------------------------------------------
+"""---------------------------------------------------------------------
     Entity Functions
-    --------------------------------------------------------------------'''  
+    --------------------------------------------------------------------"""  
 class Entity(Actor, EoAUniverse):
-    '''Entity
+    """Entity
     Our main Entity class
     Extends Panda3d's Actor
-    '''
+    """
     def __init__(self, name="Unnamed", modelName="default", scale=1, health=0,
                 power=0, addToWorld=True, startPos=False, modelStates=False,
                 gravity_walker=False):
-        '''init
+        """init
         Set up our Actor's attributes and function call, crete the actor
-        Entity extends Panda3d's Actor'''
+        Entity extends Panda3d's Actor"""
         
-        '''Set up the Actor'''
+        """Set up the Actor"""
         #Call the panda3d actor init
         modelLocation = targetDir + "/models/%s" %(modelName)
         try:
@@ -193,7 +200,7 @@ class Entity(Actor, EoAUniverse):
         self.Actor.loadAnims(modelStates)
         self.Actor.loop('idle')
         
-        '''Set Up Entity Stats'''
+        """Set Up Entity Stats"""
         #stats
         self.health = 0
         self.power = 0
@@ -213,7 +220,7 @@ class Entity(Actor, EoAUniverse):
         #Set the name
         self.name = name
         
-        '''Add character to world'''
+        """Add character to world"""
         #Add to the world if set to true(by default it is)
         #Some actors may need to be added to the game but not 
         #rendered
@@ -227,10 +234,10 @@ class Entity(Actor, EoAUniverse):
             else:
                 self.Actor.setPos(startPos)
                
-        '''Set up Entity Physics'''
+        """Set up Entity Physics"""
         self.physics = {}
         
-        '''Determine if the entity is using the GravityWalker class'''
+        """Determine if the entity is using the GravityWalker class"""
         self.physics['is_gravity_walker'] = gravity_walker
         
         #Gravity walker is for the PC controllable character (generally)
@@ -239,27 +246,31 @@ class Entity(Actor, EoAUniverse):
         else:
             self.init_physics_gravity_walker()
     
-        '''Store the entity's last known coordinates
-        We use this to check if the entity has moved for animations'''
+        """Store the entity's last known coordinates
+        We use this to check if the entity has moved for animations"""
         self.prevPos = tuple([int(i) for i in self.getPos()])
         
-        '''By default, the entity is not moving'''
+        """By default, the entity is not moving"""
         self.is_moving = False
         self.moving_buffer = 0
         
-        '''Show the name node'''
+        """Show the name node"""
         self.name_gui = {}
         if not self.physics['is_gravity_walker']:
             self.init_name_node(self.name)
         else:
             self.init_name_node(self.name,nodePos='-')
-    '''---------------------------------------------------------------------
+            
+        """Set the entity's target"""
+        self.target = None
+    """---------------------------------------------------------------------
         Init Functions
-        --------------------------------------------------------------------'''
-    '''--------------------------------------
+        --------------------------------------------------------------------"""
+    """--------------------------------------
         Name Node Functions
-        -------------------------------------'''
-    def init_name_node(self, name, nodePos=''):
+        -------------------------------------"""
+    def init_name_node(self, name, nodePos='', node_color=(1,1,1,1)):
+        """Set up the name node that appears above an entity"""
         #Create the node in 2d space
         self.name_gui['name_node_2d']=aspect2d.attachNewNode(\
                             '2d_name_node_'+name)
@@ -290,6 +301,32 @@ class Entity(Actor, EoAUniverse):
                                 
         self.name_gui['node_parent'].setBillboardPointEye()
         
+        """Set light for node"""
+        #Turn off the shader for the name node.
+        #We do this because the shader automatically turns lights 
+        #into per pixel lighting, and we don't want that for our name labels
+        self.name_gui['node_parent'].setShaderOff()
+        
+        #Create an ambient light so the name node will be one uniform light
+        self.name_gui['lighting'] = {}
+        self.name_gui['lighting']['ambient'] = AmbientLight('ambient')
+        #Set the color...eventually, make this dynamic? Or have set colors
+        #for certain NPC types / skills?
+        self.name_gui['lighting']['ambient'].setColor(Vec4(node_color))
+        
+        #Create a node path...save it in case the user wants to disable names
+        self.name_gui['lighting']['ambient_node'] = self.name_gui\
+            ['node_parent'].attachNewNode(\
+            self.name_gui['lighting']['ambient'].upcastToPandaNode())
+         
+        # If we did not call setLightOff() first, the green light would add to
+        # the total set of lights on this object.  Since we do call
+        # setLightOff(), we are turning off all the other lights on this
+        # object first, and then turning on only the green light.
+        self.name_gui['node_parent'].setLightOff()
+        self.name_gui['node_parent'].setLight(self.name_gui['lighting']\
+            ['ambient_node'])
+
         #Get the actor bounds and set the name node position
         bound_min, bound_max = self.Actor.getTightBounds()
         bound_normal = bound_max-bound_min
@@ -306,15 +343,15 @@ class Entity(Actor, EoAUniverse):
         #Set the node position
         self.name_gui['node_parent'].setPos(0,0, nodeZ)
                 
-    '''----------------------------------------
+    """----------------------------------------
         Entity Physics
-        ---------------------------------------'''           
+        ---------------------------------------"""           
     def init_physics(self, bit_wall=2, bit_floor=1,
                 c_trav=CollisionTraverser(),
                 bit_npc=3, bit_player=4, startPos=(0,0,20)):    
-        '''Set up the physics for the entity
+        """Set up the physics for the entity
         -Pass in a default CollisionTraverser, but normally one will be passed
-        in'''
+        in"""
         c_trav = base.cTrav
         # Create a sphere physics node
         # Note: Physics Actors are separate from animated Actors!
@@ -382,22 +419,29 @@ class Entity(Actor, EoAUniverse):
         sphereHandler.setStaticFrictionCoef(.7)
         sphereHandler.setDynamicFrictionCoef(.7)
 
-        '''Handle mouse events'''
-        self.physics['collisionActor'].setTag('myObjectTag', '1')
+        """Handle mouse events"""
+        #Set an object tag for the current object
+        self.physics['collisionActor'].setTag('mouse_obj_tag', '1')
         
+        #Set a python tag that stores the current object
+        self.physics['collisionActor'].setPythonTag('entity', self)
+
         """Attach the collisionActor to the entity root node"""
         self.physics['collisionActor'].reparentTo(EoAUniverse.nodes\
             ['entity_root'])
-        
+            
+        """Turn off any lights on the object"""
+        #self.physics['collisionActor'].setLightOff()
+        #self.physics['collisionActor'].setLight(EoAUniverse.lights['alnp'])
         #Show the collision sphere
         if DEBUG:
             sphereColNode.show()
             
-    '''----------------------------------------
+    """----------------------------------------
         Gravity Walker Physics (Mainly used for PC)
-        ---------------------------------------'''    
+        ---------------------------------------"""    
     def init_physics_gravity_walker(self):
-        '''Set up a gravity walker for the main character'''
+        """Set up a gravity walker for the main character"""
         
         # Create a GravityWalker and let's set some defaults
         #Create an empty dictionary to store physics for actors
@@ -430,17 +474,29 @@ class Entity(Actor, EoAUniverse):
         self.physics['playerWalker'].cWallSphereNodePath.\
             setCollideMask(BitMask32().bit(EoAUniverse.physics['collisions']\
             ['bit_masks']['bit_values']['player']))  
-                
+            
+            
+        """Handle mouse events"""
+        #Set an object tag for the current object
+        self.Actor.setTag('mouse_obj_tag', '1')
+        
+        #Set a python tag that stores the current object
+        self.Actor.setPythonTag('entity', self)
+
+        """Attach the collisionActor to the entity root node"""
+        self.Actor.reparentTo(EoAUniverse.nodes\
+            ['entity_root'])
+            
         #Show the physics indictator if DEBUG is set
         if DEBUG:
             self.physics['playerWalker'].setAvatarPhysicsIndicator(True)
         
-    '''---------------------------------------------------------------------
+    """---------------------------------------------------------------------
         Entity Functions
-        --------------------------------------------------------------------'''  
-    '''----------------------------------------
+        --------------------------------------------------------------------"""  
+    """----------------------------------------
         Position Functions
-        ---------------------------------------'''        
+        ---------------------------------------"""        
     def setPos(self,x,y,z):
         if self.physics['is_gravity_walker']:
             self.Actor.setPos(x,y,z)
@@ -454,16 +510,16 @@ class Entity(Actor, EoAUniverse):
             return self.physics['collisionActor'].getPos()
                 
                 
-    '''----------------------------------------
+    """----------------------------------------
         Equip Functions
-        ---------------------------------------'''
+        ---------------------------------------"""
     def equip_item(self, location, modelLocation, item, itemPos, itemHpr,
                     itemScale=1):
-        '''
+        """
         equipItem
         
         takes in a target actor, location and item / item settings
-        '''
+        """
         #Set the location on the target actor
         self.body[location] = self.exposeJoint(None, 'modelRoot', 
                     modelLocation)
@@ -483,21 +539,27 @@ class Entity(Actor, EoAUniverse):
         model.show()   
        
     def unequip_item(self, location):
-        '''Unequip an item at the current location.
-        Add the unequipped item to the inventory'''
+        """Unequip an item at the current location.
+        Add the unequipped item to the inventory"""
         pass
             
 
        
-    '''----------------------------------------
+    """----------------------------------------
         Target Functions
-        ---------------------------------------'''
+        ---------------------------------------"""
     def set_target(self, target):
-        '''Set our actor's target'''
+        """Set our actor's target"""
         pass
         
     def get_target(self):
-        '''Returns the actor's current target'''
+        """Returns the actor's current target"""
         pass
         
-       
+        
+    """----------------------------------------
+        Base Functions Overrides
+        ---------------------------------------"""
+    def __str__(self):
+        """Str override.  Overrides print function (e.g. print Entity)"""
+        return self.name
