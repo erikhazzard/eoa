@@ -72,33 +72,9 @@ class Universe(DirectObject, EoAUniverse):
         """Set up camera"""
         self.init_camera()
         
-        """GUI"""
-        #imageObject = OnscreenImage(image = target_dir + '/gui/target_box.png', pos = (1, .4, .9))
-        #imageObject.setScale(.3)
-        #imageObject.setTransparency(TransparencyAttrib.MAlpha)
-        
-        #create egg
-        #egg-texture-cards -o button_maps.egg -p 240,240 button_ready.png button_click.png button_rollover.png button_disabled.png
+        """Set up GUI"""
+        self.init_gui()
 
-        #Create empty GUI dict
-        self.GUI = {'target_box':{}}
-        
-        self.GUI['target_box']['node_path'] = loader.loadModel(target_dir+\
-            '/gui/target_box.egg')
-        self.GUI['target_box']['node_path'].reparentTo(aspect2d)
-        self.GUI['target_box']['node_path'].setTransparency(1)
-        self.GUI['target_box']['node_path'].setAlphaScale(1)
-        self.GUI['target_box']['node_path'].setScale(.5)
-        self.GUI['target_box']['node_path'].setPos(.92,.92,.92)
-        
-        self.GUI['target_text'] = OnscreenText(parent=\
-            self.GUI['target_box']['node_path'], text = '', pos=(0,-.072), 
-            scale=0.1,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
-        """--------------------------------------------------------"""
-        
-        
-        """Set up skydome"""
-        #self.init_skydome()
         
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
@@ -116,6 +92,8 @@ class Universe(DirectObject, EoAUniverse):
         #Setup mouse collision test
         base.taskMgr.add(self.update_mouse_collisions, 'update_mouse_collisions')
         
+        """Set up skydome"""
+        #self.init_skydome()
         #Skydome task
         #base.taskMgr.add(self.cameraUpdated, "camupdate")
         """--------------------------------------------------------"""
@@ -167,7 +145,7 @@ class Universe(DirectObject, EoAUniverse):
         #mouse keys
         #mouse1 is left click
         self.accept("mouse1", self.controls_set_key, ["mouse1", 1])
-        self.accept("mouse1", self.setTarget)       #left-click grabs a piece
+        self.accept("mouse1", self.set_target_on_mouseclick)       #left-click grabs a piece
         self.accept("mouse1-up", self.controls_set_key, ["mouse1", 0])
         #mouse3 is right click
         self.accept("mouse3", self.controls_set_key, ["mouse3", 1])
@@ -175,7 +153,7 @@ class Universe(DirectObject, EoAUniverse):
         #mouse2 is scroll wheel click
         self.accept("mouse2", self.controls_set_key, ["mouse2", 1])
         self.accept("mouse2-up", self.controls_set_key, ["mouse2", 0])
-        base.accept ('escape', sys.exit)  # hit escape to quit!
+        self.accept ('escape', sys.exit)  # hit escape to quit!
         
     def controls_set_key(self, key, value):
         """Set up keyboard keys"""
@@ -211,7 +189,7 @@ class Universe(DirectObject, EoAUniverse):
         
         # Create an ambient light
         self.lights['alight'] = AmbientLight('AmbientLight')
-        self.lights['alight'].setColor(VBase4(0.5, 0.5, 0.5, 0.1))
+        self.lights['alight'].setColor(VBase4(0.1, 0.1, 0.1, 0.1))
         self.lights['alnp'] = render.attachNewNode(self.lights['alight'])
         render.setLight(self.lights['alnp'])
     
@@ -229,7 +207,7 @@ class Universe(DirectObject, EoAUniverse):
         self.entities['PC'] = Entity(gravity_walker=True,modelName="boxman", 
                                     name='PC', startPos=(0,0,5))
                
-        for i in range(25):
+        for i in range(5):
             self.entities['NPC_'+str(i)] = Entity(modelName="boxman", 
                         name='NPC_'+str(i),startPos=(random()*i+i,
                                                     random()*i+i,100))
@@ -256,6 +234,65 @@ class Universe(DirectObject, EoAUniverse):
         self.controls['camera_settings']['timer'] = 0
         self.controls['camera_settings']['zoom'] = 20
      
+    """=======GUI==============================================="""   
+    def init_gui(self):
+        """Set up the GUI dict and GUI nodes.  
+        Some elements will be toggleable via command keys (e.g. 'i' for 
+        inventory) so we set to node.hide() by default"""
+        #imageObject = OnscreenImage(image = target_dir + '/gui/target_box.png', pos = (1, .4, .9))
+        #imageObject.setScale(.3)
+        #imageObject.setTransparency(TransparencyAttrib.MAlpha)
+        
+        #create egg
+        #egg-texture-cards -o button_maps.egg -p 240,240 button_ready.png button_click.png button_rollover.png button_disabled.png
+ 
+        #Create empty GUI dict
+        self.GUI = {'target_box':{},
+                    'inventory':{}}
+        
+        """Target Box"""
+        self.GUI['target_box']['node_path'] = loader.loadModel(target_dir+\
+            '/gui/target_box.egg')
+        #self.GUI['target_box']['node_path'].reparentTo(aspect2d)
+        self.GUI['target_box']['node_path'].reparentTo(base.a2dBottomLeft)
+        self.GUI['target_box']['node_path'].setTransparency(1)
+        #self.GUI['target_box']['node_path'].setAlphaScale(1)
+        self.GUI['target_box']['node_path'].setScale(.5)
+        #self.GUI['target_box']['node_path'].setPos(.92,.92,.92)
+        self.GUI['target_box']['node_path'].setPos(.25,0,.1)
+        
+        self.GUI['target_text'] = OnscreenText(parent=\
+            self.GUI['target_box']['node_path'], text = '', pos=(0,-.072), 
+            scale=0.1,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+        #self.GUI['target_box']['node_path'].setPos(self.GUI['target_box']\
+        #    ['node_path'].getBounds().getCenter()-\
+        #    self.GUI['target_box']['node_path'].getBounds().getCenter())
+        
+        '''
+        CM=CardMaker('')
+        card=base.a2dBottomLeft.attachNewNode(CM.generate())
+        card.setScale(.25)
+        #card.setTexture(tex)
+        card.setTransparency(1)
+        ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
+           text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
+        NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
+        '''
+        
+        
+        """Inventory"""
+        self.GUI['inventory']['node_path'] = loader.loadModel(target_dir+\
+            '/gui/inventory.egg')
+        self.GUI['inventory']['node_path'].reparentTo(aspect2d)
+        self.GUI['inventory']['node_path'].setTransparency(1)
+        self.GUI['inventory']['node_path'].setAlphaScale(1)
+        self.GUI['inventory']['node_path'].setScale(.8)
+        self.GUI['inventory']['node_path'].setPos(0,0,0)
+        self.GUI['inventory']['node_path'].hide()
+        
+        self.accept ('i', self.toggle_gui_element, [self.GUI['inventory']['node_path']])  # hit escape to quit!
+        
     """=======Skydome=============================================="""
     def init_skydome(self):
         #SKYBOX
@@ -267,7 +304,7 @@ class Universe(DirectObject, EoAUniverse):
         texture = loader.loadTexture(texturefile)
         self.textureStage0 = TextureStage("stage0")
         self.textureStage0.setMode(TextureStage.MReplace)
-        self.skybox.setTexture(self.textureStage0,texture,1)
+        self.skybox.setTexture(self.textureStage0,texture,.2)
         self.rate = Vec4(0.004, 0.002, 0.008, 0.010)
         self.textureScale = Vec4(1,1,1,1)
         self.skycolor = Vec4(.1, .1, .1, 0)
@@ -360,7 +397,8 @@ class Universe(DirectObject, EoAUniverse):
         
         #Update the Sun's position.
         #TODO - tie this in with day/night/time system
-        self.lights['sunPos'] += .5
+        self.lights['sunPos'] += 1
+        print self.lights['sunPos']
         #Move the sun
         self.lights['dlight'].setHpr(0,self.lights['sunPos'],0)
         #Finish
@@ -549,6 +587,12 @@ class Universe(DirectObject, EoAUniverse):
     
     """=======Update skybox========================================"""
     def cameraUpdated(self, task):
+        #self.lights['sunPos']
+        self.skycolor = Vec4( (self.lights['sunPos'] % 360.0) / 360,
+                                (self.lights['sunPos'] % 360.0) / 360,
+                                (self.lights['sunPos'] % 360.0) / 360
+                                ,0 )
+        self.skybox.setShaderInput("sky", self.skycolor)
         render.setShaderInput('time', task.time)
         return Task.cont
         
@@ -558,8 +602,24 @@ class Universe(DirectObject, EoAUniverse):
                         EoA Universe Functions                       
                                                                        
         --------------------------------------------------------------------"""   
+    """=======Toggle GUI Element======================================"""
+    def toggle_gui_element(self, obj=None):
+        """Turns on / off a GUI element"""
+        try:
+            #Toggle node being shown / hidden
+            if obj.isHidden():
+                obj.show()
+            else:
+                obj.hide()
+        except:
+            #Not a good idea for a catch all normally, but we don't want to 
+            #break the game if we do catch something
+            "Object is hidden"
+            
     """=======Set PC's target======================================"""
-    def setTarget(self):
+    def set_target_on_mouseclick(self):
+        """Set the player's target to an entity based on mouse click"""
+        
         #if self.physics['collisions']['mouse']['prev_node'] is not None:
         #    print self.physics['collisions']['mouse']['prev_node']
         if self.physics['collisions']['mouse']['current_node'] is not None:
@@ -609,7 +669,7 @@ class Universe(DirectObject, EoAUniverse):
             self.entities['PC'].target = None
             
             #Clear the target text
-            """TODO create a setTarget method that updates targetbox"""
+            """TODO create a set_target_on_mouseclick method that updates targetbox"""
             self.GUI['target_text'].setText("")
 """------------------------------------------------------------------------"""
 

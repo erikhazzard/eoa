@@ -170,7 +170,7 @@ class EoAUniverse(DirectObject):
 """---------------------------------------------------------------------
     Entity Functions
     --------------------------------------------------------------------"""  
-class Entity(Actor, EoAUniverse):
+class Entity(EoAUniverse):
     """Entity
     Our main Entity class
     Extends Panda3d's Actor
@@ -207,15 +207,21 @@ class Entity(Actor, EoAUniverse):
         
         #Default body parts.  Different creatures have different parts
         self.body = {'head':None, 'chest': None, 'shoulders':None, 'back':None,
-                            'arms':None, 'hands':None, 
+                            'arms':None, 'wrist':None, 'hands':None,
+                            'fingers':None,
                             'waist':None, 'legs':None, 'feet':None,
-                            'primary': None, 'secondary': None}
+                            'primary': None, 'secondary': None, 'ranged':None}
         
         #Our actor's inventory.
         self.inventory = []
         
+        #Set the amount of money
+        self.inventory_gold = 0
+        
         #Equipped items. Body parts link to items in inventory
-        self.equippedItems = {}
+        self.equipped_items = {}
+        
+
         
         #Set the name
         self.name = name
