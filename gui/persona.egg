@@ -1,0 +1,33 @@
+<Comment> {
+  "egg-texture-cards -o persona.egg -p 240,240 persona.png"
+}
+<Texture> persona {
+  persona.png
+}
+<Group> {
+  <VertexPool> vpool {
+    <Vertex> 0 {
+      -0.533333 0.533333 0
+      <UV> { 0 1 }
+    }
+    <Vertex> 1 {
+      -0.533333 -0.533333 0
+      <UV> { 0 0 }
+    }
+    <Vertex> 2 {
+      0.533333 -0.533333 0
+      <UV> { 1 0 }
+    }
+    <Vertex> 3 {
+      0.533333 0.533333 0
+      <UV> { 1 1 }
+    }
+  }
+  <Group> persona {
+    <Polygon> {
+      <RGBA> { 1 1 1 1 }
+      <TRef> { persona }
+      <VertexRef> { 0 1 2 3 <Ref> { vpool } }
+    }
+  }
+}
