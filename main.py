@@ -10,7 +10,7 @@ from random import random
 from pandac.PandaModules import *
 
 loadPrcFileData("", """
-show-frame-rate-meter #t
+show-frame-rate-meter #f
 """)
 loadPrcFileData('',"""
 sync-video 0
@@ -79,6 +79,7 @@ class Universe(DirectObject, EoAUniverse):
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
         self.prev_time = 0.0
+        
         """Set up tasks"""
         #Set up movement update
         base.taskMgr.add(self.update_movement, 'update_movement')
@@ -239,16 +240,18 @@ class Universe(DirectObject, EoAUniverse):
         """Set up the GUI dict and GUI nodes.  
         Some elements will be toggleable via command keys (e.g. 'i' for 
         inventory) so we set to node.hide() by default"""
-        #imageObject = OnscreenImage(image = target_dir + '/gui/target_box.png', pos = (1, .4, .9))
+        #imageObject = OnscreenImage(image = target_dir + 
+            #'/gui/target_box.png', pos = (1, .4, .9))
         #imageObject.setScale(.3)
         #imageObject.setTransparency(TransparencyAttrib.MAlpha)
         
         #create egg
-        #egg-texture-cards -o button_maps.egg -p 240,240 button_ready.png button_click.png button_rollover.png button_disabled.png
+        #egg-texture-cards -o button_maps.egg -p 240,240 button_disabled.png
  
         #Create empty GUI dict
         self.GUI = {'target_box':{},
-                    'inventory':{}}
+                    'inventory':{},
+                    'persona':{}}
         
         """Target Box"""
         self.GUI['target_box']['node_path'] = loader.loadModel(target_dir+\
@@ -270,6 +273,7 @@ class Universe(DirectObject, EoAUniverse):
         #    self.GUI['target_box']['node_path'].getBounds().getCenter())
         
         '''
+        #Creating a CARD instead of using the egg maker
         CM=CardMaker('')
         card=base.a2dBottomLeft.attachNewNode(CM.generate())
         card.setScale(.25)
@@ -279,6 +283,31 @@ class Universe(DirectObject, EoAUniverse):
            text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
         NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
         '''
+        
+        """Persona Box (Rename later)"""
+        self.GUI['persona']['node_path'] = loader.loadModel(target_dir+\
+            '/gui/persona.egg')
+        self.GUI['persona']['node_path'].reparentTo(base.a2dTopRight)
+        self.GUI['persona']['node_path'].setTransparency(1)
+        self.GUI['persona']['node_path'].setScale(.6)
+        self.GUI['persona']['node_path'].setPos(-.29,0,-.32)
+        
+        #Person text
+        self.GUI['persona_name'] = OnscreenText(parent=\
+            self.GUI['persona']['node_path'], text = 'PC', pos=(0,.3), 
+            scale=0.08,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+        #HEALTH PERCENT
+        #y is inverted as the text is aligned to the top right
+        self.GUI['persona_health_percent'] = OnscreenText(parent=\
+            self.GUI['persona']['node_path'], text = '100', pos=(.38,.145), 
+            scale=0.04,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+        #POWER PERCENT
+        #y is inverted as the text is aligned to the top right
+        self.GUI['persona_power_percent'] = OnscreenText(parent=\
+            self.GUI['persona']['node_path'], text = '100', pos=(.38,-.024), 
+            scale=0.04,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
         
         
         """Inventory"""
@@ -291,7 +320,8 @@ class Universe(DirectObject, EoAUniverse):
         self.GUI['inventory']['node_path'].setPos(0,0,0)
         self.GUI['inventory']['node_path'].hide()
         
-        self.accept ('i', self.toggle_gui_element, [self.GUI['inventory']['node_path']])  # hit escape to quit!
+        self.accept ('i', self.toggle_gui_element, [self.GUI['inventory']\
+                ['node_path']])  # hit escape to quit!
         
     """=======Skydome=============================================="""
     def init_skydome(self):
@@ -398,7 +428,7 @@ class Universe(DirectObject, EoAUniverse):
         #Update the Sun's position.
         #TODO - tie this in with day/night/time system
         self.lights['sunPos'] += 1
-        print self.lights['sunPos']
+        #print self.lights['sunPos']
         #Move the sun
         self.lights['dlight'].setHpr(0,self.lights['sunPos'],0)
         #Finish
