@@ -1,0 +1,33 @@
+<Comment> {
+  "egg-texture-cards -o target_box_active.egg -p 240,240 target_box_active.png"
+}
+<Texture> target_box_active {
+  target_box_active.png
+}
+<Group> {
+  <VertexPool> vpool {
+    <Vertex> 0 {
+      -0.533333 0.533333 0
+      <UV> { 0 1 }
+    }
+    <Vertex> 1 {
+      -0.533333 -0.533333 0
+      <UV> { 0 0 }
+    }
+    <Vertex> 2 {
+      0.533333 -0.533333 0
+      <UV> { 1 0 }
+    }
+    <Vertex> 3 {
+      0.533333 0.533333 0
+      <UV> { 1 1 }
+    }
+  }
+  <Group> target_box_active {
+    <Polygon> {
+      <RGBA> { 1 1 1 1 }
+      <TRef> { target_box_active }
+      <VertexRef> { 0 1 2 3 <Ref> { vpool } }
+    }
+  }
+}

@@ -175,8 +175,9 @@ class Entity(EoAUniverse):
     Our main Entity class
     Extends Panda3d's Actor
     """
-    def __init__(self, name="Unnamed", modelName="default", scale=1, health=0,
-                power=0, addToWorld=True, startPos=False, modelStates=False,
+    def __init__(self, name="Unnamed", modelName="default", scale=1, 
+                health=0, power=0, stats={}, elementals={},
+                addToWorld=True, startPos=False, modelStates=False,
                 gravity_walker=False):
         """init
         Set up our Actor's attributes and function call, crete the actor
@@ -202,9 +203,21 @@ class Entity(EoAUniverse):
         
         """Set Up Entity Stats"""
         #stats
-        self.health = 0
-        self.power = 0
+        self.health = health
+        self.power = power
         
+        self.stats = stats
+        #If no stats are passed in, set all to 0
+        if self.stats == {}:
+            self.stats = {'agi':0, 'dex':0, 'int':0, 'sta':0, 'str':0, 'wis':0}
+
+        self.elementals = elementals
+        #If no elemental stats are passed in, set to 0
+        if self.elementals == {}:
+            self.elementals = {'dark':0, 'earth':0, 'fire':0, 'light':0,
+                                'water':0, 'wind':0}
+        
+        """Set up entity body / items"""
         #Default body parts.  Different creatures have different parts
         self.body = {'head':None, 'chest': None, 'shoulders':None, 'back':None,
                             'arms':None, 'wrist':None, 'hands':None,
@@ -220,8 +233,6 @@ class Entity(EoAUniverse):
         
         #Equipped items. Body parts link to items in inventory
         self.equipped_items = {}
-        
-
         
         #Set the name
         self.name = name
@@ -248,9 +259,9 @@ class Entity(EoAUniverse):
         
         #Gravity walker is for the PC controllable character (generally)
         if not self.physics['is_gravity_walker']:
-            self.init_physics(startPos=startPos)
+            self.init_entity_physics(startPos=startPos)
         else:
-            self.init_physics_gravity_walker()
+            self.init_entity_physics_gravity_walker ()
     
         """Store the entity's last known coordinates
         We use this to check if the entity has moved for animations"""
@@ -269,6 +280,10 @@ class Entity(EoAUniverse):
             
         """Set the entity's target"""
         self.target = None
+        
+        #Determine if the entity is engaged with another target
+        self.is_engaged = False
+        
     """---------------------------------------------------------------------
         Init Functions
         --------------------------------------------------------------------"""
@@ -352,7 +367,7 @@ class Entity(EoAUniverse):
     """----------------------------------------
         Entity Physics
         ---------------------------------------"""           
-    def init_physics(self, bit_wall=2, bit_floor=1,
+    def init_entity_physics(self, bit_wall=2, bit_floor=1,
                 c_trav=CollisionTraverser(),
                 bit_npc=3, bit_player=4, startPos=(0,0,20)):    
         """Set up the physics for the entity
@@ -446,7 +461,7 @@ class Entity(EoAUniverse):
     """----------------------------------------
         Gravity Walker Physics (Mainly used for PC)
         ---------------------------------------"""    
-    def init_physics_gravity_walker(self):
+    def init_entity_physics_gravity_walker(self):
         """Set up a gravity walker for the main character"""
         
         # Create a GravityWalker and let's set some defaults
