@@ -176,7 +176,7 @@ class Entity(EoAUniverse):
     Extends Panda3d's Actor
     """
     def __init__(self, name="Unnamed", modelName="default", scale=1, 
-                health=0, power=0, stats={}, elementals={},
+                health=1, power=1, ac=1, stats={}, elementals={},
                 addToWorld=True, startPos=False, modelStates=False,
                 gravity_walker=False):
         """init
@@ -205,6 +205,8 @@ class Entity(EoAUniverse):
         #stats
         self.health = health
         self.power = power
+        #Armor class
+        self.ac = ac
         
         self.stats = stats
         #If no stats are passed in, set all to 0
@@ -529,8 +531,7 @@ class Entity(EoAUniverse):
             return self.Actor.getPos()
         else:
             return self.physics['collisionActor'].getPos()
-                
-                
+                                
     """----------------------------------------
         Equip Functions
         ---------------------------------------"""
@@ -563,21 +564,73 @@ class Entity(EoAUniverse):
         """Unequip an item at the current location.
         Add the unequipped item to the inventory"""
         pass
-            
-
-       
+                 
     """----------------------------------------
         Target Functions
         ---------------------------------------"""
     def set_target(self, target):
         """Set our actor's target"""
-        pass
+        self.target = target
         
     def get_target(self):
         """Returns the actor's current target"""
+        return self.target
+        
+    """----------------------------------------
+        Damage functions
+        ---------------------------------------"""
+    def take_damage(self, dmg_amt, dmg_type, dmg_elemental, dmg_extra,
+                    dmg_amt_override):
+        """Takes an amount of damage and deals it based on character's stats
+        
+        dmg_amt: base amount of damage to take
+        dmg_type: type of damage (combat or magic...more?)
+        dmg_elemental: elemental type
+        dmg_extra: and extra damage effects (extra elemental dmg? etc)
+        dmg_amt_override: deals X amount of damage regardless of player's stats
+            should this be used much, if at all?
+        """
+        
+        #Create variable to hold final damage amount
+        final_dmg_amt = 0
+        
+        """Calculate dmg from physical / magic type"""
+        
+        #Check for damage type
+        #COMBAT
+        if dmg_type == 0:
+            #Calculate damage based on character physcial stats
+            #TODO 
+            #   calculate
+            final_dmg_amt += dmg_amt
+        #MAGIC
+        elif dmg_type == 1:
+            #Calculate damage based on character spell stats
+            #TODO 
+            #   calculate
+            final_dmg_amt += dmg_amt
+        
+        """Calculate dmg from elemental type"""
+        #TODO
+        # Figure out best way to do this
+        
+        """Other dmg stuff - need to do"""
+        
+        #Take damage (reduce entity health)
+        self.health -= final_dmg_amt
+        
+        #Update GUI elements associated with the entity
+        self.update_gui_elements()
+ 
+    def update_gui_elements(self):
+        """Update the GUI elements.
+        
+        TODO 
+            -Update all elements
+        """
         pass
         
-        
+    
     """----------------------------------------
         Base Functions Overrides
         ---------------------------------------"""

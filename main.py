@@ -230,6 +230,7 @@ class Universe(DirectObject, EoAUniverse):
         #Setup the PC entity
         self.entities['PC'] = Entity(gravity_walker=True,modelName="boxman", 
                                     name='PC', startPos=(0,0,5), 
+                                    health=8, power=8,
                                     stats={'agi':10, 'dex':19, 'int':19, 
                                             'sta':15, 'str':14, 'wis':18})
                
@@ -292,6 +293,7 @@ class Universe(DirectObject, EoAUniverse):
         """Persona Box (Rename later?)"""
         self.GUI['persona']['node_path'] = loader.loadModel(target_dir+\
             '/gui/persona.egg')
+        #Reparent to the top right of the screen
         self.GUI['persona']['node_path'].reparentTo(base.a2dTopRight)
         self.GUI['persona']['node_path'].setTransparency(1)
         self.GUI['persona']['node_path'].setScale(.6)
