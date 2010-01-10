@@ -23,16 +23,16 @@ from direct.interval.IntervalGlobal import *
 from direct.filter.CommonFilters import CommonFilters
 
 """Set target directory"""
-targetDir = os.path.abspath(sys.path[0])
-targetDir = Filename.fromOsSpecific(targetDir).getFullpath()
+target_dir = os.path.abspath(sys.path[0])
+target_dir = Filename.fromOsSpecific(target_dir).getFullpath()
 
 
 DEBUG = False
 """---------------------------------------------------------------------------
-    Universe Functions
+    Universe Class
     -----------------------------------------------------------------------"""    
 class EoAUniverse(DirectObject):
-    #Set up the physics
+    #Set up a dictionary for physics related objects
     physics = {'collisions': \
                             {'bit_masks': \
                                 {'bit_values':{}} \
@@ -40,10 +40,20 @@ class EoAUniverse(DirectObject):
                 'gravity':{} \
                 }
     
+    #Create an empty attribute for the environment. Will be overriden when
+    #   init_environment is called
     environment = ''
     
+    #Create a dictionary object to store all the entities
+    entities = {}
+    
+    #Dictionary of nodes - to be used later?
     nodes = {}
 
+    #Create an empty GUI placeholder object.  When init_gui() is called, this
+    #   will hold the GUI object which will be accessable by other classes
+    GUI = ''
+    
     """=======Environment======
         ENVIRONMENT SETUP
         ======================="""
@@ -61,7 +71,17 @@ class EoAUniverse(DirectObject):
         
         #Allow for shaders
         render.setShaderAuto()
+    
+    """=======GUI======
+        GUI SETUP
+    ======================="""
+    def init_gui(self):
+        """Set the GUI attribute equal to a new EoAGUI object.
         
+        There probably will ever only be one call made to EoAGUI() and it is
+        here."""
+        EoAUniverse.GUI = EoAGUI()
+    
     """=======Physics==========
         PHYSICS SETUP
         ======================="""
@@ -170,13 +190,14 @@ class EoAUniverse(DirectObject):
 """---------------------------------------------------------------------
     Entity Functions
     --------------------------------------------------------------------"""  
-class Entity(EoAUniverse):
+class EoAEntity(EoAUniverse):
     """Entity
     Our main Entity class
-    Extends Panda3d's Actor
     """
+    
     def __init__(self, name="Unnamed", modelName="default", scale=1, 
-                health=1, power=1, ac=1, stats={}, elementals={},
+                max_health=1, max_power=1, health=None, power=None,
+                ac=1, stats={}, elementals={},
                 addToWorld=True, startPos=False, modelStates=False,
                 gravity_walker=False):
         """init
@@ -185,11 +206,11 @@ class Entity(EoAUniverse):
         
         """Set up the Actor"""
         #Call the panda3d actor init
-        modelLocation = targetDir + "/models/%s" %(modelName)
+        modelLocation = target_dir + "/models/%s" %(modelName)
         try:
             if not modelStates:
-                modelStates = {"idle":targetDir + "/models/%s-idle" %(modelName),
-                               "walk":targetDir + "/models/%s-walk" %(modelName)}
+                modelStates = {"idle":target_dir + "/models/%s-idle" %(modelName),
+                               "walk":target_dir + "/models/%s-walk" %(modelName)}
             else:
                 modelStates = modelStates
         except:
@@ -203,8 +224,17 @@ class Entity(EoAUniverse):
         
         """Set Up Entity Stats"""
         #stats
-        self.health = health
-        self.power = power
+        self.max_health = max_health
+        self.health = max_health
+        #If the entity shouldn't be create with full health
+        if health is not None:
+            self.health = health
+        
+        self.max_power = max_power
+        self.power = max_power
+        #If the entity shouldn't be created with full power
+        if power is not None:
+            self.power = power
         #Armor class
         self.ac = ac
         
@@ -547,7 +577,7 @@ class Entity(EoAUniverse):
                     modelLocation)
         
         #Create the initial model configuration
-        modelSetup = (targetDir + "/models/%s" %(item), itemPos, itemHpr, 1)
+        modelSetup = (target_dir + "/models/%s" %(item), itemPos, itemHpr, 1)
         
         #Configure the model
         model = loader.loadModel(modelSetup[0]) #load the model 
@@ -621,14 +651,6 @@ class Entity(EoAUniverse):
         
         #Update GUI elements associated with the entity
         self.update_gui_elements()
- 
-    def update_gui_elements(self):
-        """Update the GUI elements.
-        
-        TODO 
-            -Update all elements
-        """
-        pass
         
     
     """----------------------------------------
@@ -637,3 +659,290 @@ class Entity(EoAUniverse):
     def __str__(self):
         """Str override.  Overrides print function (e.g. print Entity)"""
         return self.name
+        
+"""---------------------------------------------------------------------------
+    GUI Class
+    -----------------------------------------------------------------------"""    
+class EoAGUI(DirectObject):
+    """Class that handles the GUI.  Eventually, we'll support GUI customization
+    
+    METHODS
+    ---------
+    update_gui()
+        called when a GUI update needs to be made - e.g. when the player takes 
+        damage.
+    """
+    
+    def __init__(self):
+        #Set up some object attributes
+        self.target_box = {}
+        self.inventory = {'text_nodes':{'stats':{}}}
+        self.persona = {}
+        
+        #Call to create the GUI elements
+        self.draw_gui()
+    
+    """=======Draw GUI==========
+    DRAW GUI
+    ======================="""
+    def draw_gui(self):
+        """-----------CREATE GUI ELEMENTS-------------------------"""
+        """Elements always on screen"""
+        self.load_persona()
+        self.load_target_box()
+       
+        """Toggleable elements"""
+        self.load_inventory()
+       
+        """------------
+        Set up config key - LATER WHEN REARRANGING CODE - MOVE TO KEY CONFIG
+        """
+        #inventory
+        self.accept ('i', self.toggle_gui_element, [self.inventory\
+                ['container_node']])  # hit escape to quit!
+        
+    """=======Persona==========
+    PERSONA SETUP
+    ======================="""
+    def load_persona(self):
+        """Load the persona on screen GUI element that shows character info
+        
+        Shows name, health and power with percentages and health / power bars
+        """
+        #Persona Box (Rename later?)
+        self.persona['node_path'] = loader.loadModel(target_dir+\
+            '/gui/persona.egg')
+        #Reparent to the top right of the screen
+        self.persona['node_path'].reparentTo(base.a2dTopRight)
+        self.persona['node_path'].setTransparency(1)
+        self.persona['node_path'].setScale(.6)
+        self.persona['node_path'].setPos(-.31,0,-.32)
+        
+        #Person text
+        self.persona['persona_name'] = OnscreenText(parent=\
+            self.persona['node_path'], text = EoAUniverse.entities['PC'].name,\
+            pos=(0,.3), scale=0.085,fg=(1,1,1,1), \
+            align=TextNode.ACenter, mayChange=1)
+        
+        #HEALTH PERCENT
+        #y is inverted as the text is aligned to the top right
+        self.persona['health_percent'] = OnscreenText(parent=\
+            self.persona['node_path'], text = '', pos=(.38,.145), 
+            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+        #POWER PERCENT
+        #y is inverted as the text is aligned to the top right
+        self.persona['power_percent'] = OnscreenText(parent=\
+            self.persona['node_path'], text = '', pos=(.38,-.024), 
+            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+    """=======Target Box==========
+    TARGET BOX SETUP
+    ======================="""
+    def load_target_box(self):
+        """Loads the on screen targetbox
+        
+        Shows the player's target's name and a bar indicating health percentage
+        """
+    
+        #Create a parent node for the target box and the corresponding 
+        #   target text
+        #The container node is simply a node that will be the parent of the 
+        #   gui target box image node and the target box text node
+        self.target_box['container_node'] = base.a2dTopRight.\
+            attachNewNode("target_box_container")
+            
+        #Load the target box model (really just a card with a texture on it)
+        #Make this extensible later....
+        self.target_box['node_path'] = loader.loadModel(target_dir+\
+            '/gui/target_box.egg')
+        
+        #Attach the target box to the container node
+        self.target_box['node_path'].reparentTo( \
+            self.target_box['container_node'])
+        
+        #Make sure it's fully opaque
+        self.target_box['node_path'].setTransparency(1)
+        self.target_box['node_path'].setAlphaScale(1)
+        
+        #Set the target box container position and scale of the container
+        self.target_box['container_node'].setPos(-.32,0,-.7)
+        self.target_box['container_node'].setScale(.6)
+        
+        #Set the target box text, attach it to the container node
+        #we could onscreentext here instead, but textnode gives more control   
+        #Create a text node for the target text
+        self.target_box['target_text'] = TextNode('gui_target_text')
+        self.target_box['target_text'].setText("")
+        self.target_box['target_text'].setAlign(TextNode.ACenter)
+
+        #Create a nodepath to attach the target text to
+        self.target_box['target_text_node_path'] = \
+            self.target_box['container_node'].attachNewNode(\
+            self.target_box['target_text'])
+        #Set the scale and position
+        self.target_box['target_text_node_path'].setScale(0.07)
+        self.target_box['target_text_node_path'].setPos(0,0,.32)
+
+    """=======Invetory=========================================
+    INVENTORY SETUP
+    ======================="""    
+    def load_inventory(self):
+        """Sets up inventory - inventory comes up on key press
+        
+        Shows character's equipped items, inventory, money, stats, 
+        elemental attributes, health / power"""
+
+        #Create a container node to store the inventory image and text nodes in
+        #   similar to above
+        self.inventory['container_node'] = base.aspect2d.\
+            attachNewNode("inventory_container")
+            
+        #Create the inventory image node and reparent it to the container
+        self.inventory['node_path'] = loader.loadModel(target_dir+\
+            '/gui/inventory.egg')
+        self.inventory['node_path'].reparentTo(\
+            self.inventory['container_node'])
+            
+        #Set the position and scale of the inventory image node
+        self.inventory['node_path'].setTransparency(1)
+        self.inventory['node_path'].setAlphaScale(1)
+        
+        #Set the position, sacle, and hide the iventory container node
+        self.inventory['container_node'].setPos(0,0,0)
+        self.inventory['container_node'].hide()
+        self.inventory['container_node'].setScale(.8)
+        
+        """Inventory text nodes"""
+        #Create a container node path to hold all the stat text nodes
+        #Attach the stats text node to the stats node path
+        self.inventory['text_nodes']['stats']['stats_text_nodes'] = \
+            NodePath("inventory_stats_text_nodes")
+        
+        #Create text nodes for all the stats
+        #tweak the position later, see function for more details
+        self.gui_inventory_add_stat(stat='agi')
+        self.gui_inventory_add_stat(stat='dex', pos=(0,0,-1.5))
+        self.gui_inventory_add_stat(stat='int', pos=(0,0,-3))
+        self.gui_inventory_add_stat(stat='sta', pos=(0,0,-4.6))
+        self.gui_inventory_add_stat(stat='str', pos=(0,0,-6.2))
+        self.gui_inventory_add_stat(stat='wis', pos=(0,0,-7.7))
+        
+        #reparent the stat text container node to the inventory container node
+        self.inventory['text_nodes']['stats']['stats_text_nodes'].\
+            reparentTo(self.inventory['container_node'])        
+            
+        #Scale and position the stats container node (which contains the 
+        #   stats_text_nodes
+        self.inventory['text_nodes']['stats']['stats_text_nodes'].\
+            setScale(0.05)
+        self.inventory['text_nodes']['stats']['stats_text_nodes'].\
+            setPos(.22,0,-.42)
+            
+    """=======Add stat text nodes====
+    GUI INVENTORY ADD STAT
+    ======================="""
+    def gui_inventory_add_stat(self, stat='', pos=(0,0,0)):
+        """Function to create stat text nodes. 
+        
+        Need to be more extensible for other text nodes in the inventory and
+        other GUI elements
+        
+        TODO:
+            Make more extensible
+        
+        #Create text nodes for stats, health, power, etc
+        #This is the basic process:
+        #   -Create a text node for each stat
+        #   -Reparent the text node to an empty container node so we can set
+        #       position easier
+        #   -Reparent that empty container node for the text node to another
+        #       empty container node so the stat nodes are all grouped together
+        """
+        
+        #Adds a stat text node and attaches the text node
+        #Create an empty text node container for the stat
+        self.inventory['text_nodes']['stats'][stat] = TextNode(\
+        'inventory_stat_agi')
+        
+        #Set the initial text
+        #Get the stat from the PC entity
+        text = str(EoAUniverse.entities['PC'].stats[stat])
+        self.inventory['text_nodes']['stats'][stat].setText(text)
+        
+        #Set alignment to the right
+        self.inventory['text_nodes']['stats'][stat].setAlign(TextNode.\
+            ARight)
+            
+        #Create empty container node path for the stat
+        #   attach it to the base stats_text_nodes container which contains all
+        #   these empty container nodes for individual stats
+        #   Attach the text node we created to the base stat_text_nodes 
+        #   container so we can position the stat_text_nodes container and 
+        #   move all the stat text nodes at once
+        
+        self.inventory['text_nodes']['stats'][stat+'_container'] = \
+            self.inventory['text_nodes']['stats']\
+            ['stats_text_nodes'].attachNewNode(self.inventory\
+            ['text_nodes']['stats'][stat])
+        #Position the text node container
+        self.inventory['text_nodes']['stats'][stat+'_container'].\
+            setPos(pos)
+               
+    """---------------------------------------------------------------------
+        GUI Functions
+        --------------------------------------------------------------------"""  
+    """=======Toggle GUI Element==========
+    TOGGLE GUI ELEMENT
+    ======================="""
+    def toggle_gui_element(self, obj=None):
+        """Turns on / off a GUI element"""
+        
+        try:
+            #Toggle node being shown / hidden
+            if obj.isHidden():
+                obj.show()
+            else:
+                obj.hide()
+        except:
+            #Not a good idea for a catch all normally, but we don't want to 
+            #break the game if we do catch something
+            "Object is hidden"
+            
+    """=======UPDATE GUI Element==========
+    UPDATE GUI ELEMENT
+    ======================="""  
+    def update_gui_element(self, gui_element=None):
+        """Updates the GUI, or a certain element if passed in"""
+        
+        """Update everything"""
+        if gui_element is None:
+            #If there is no GUI element passed in, update everything
+            """Update Persona"""
+            #Calculate percent by taking a float of the health / power and 
+            #   divide it by the max health / power then multiple by 100
+            
+            #HP percent = health / max health
+            hp_percent =  ( float(EoAUniverse.entities['PC'].health) / \
+                            EoAUniverse.entities['PC'].max_health ) * \
+                            100
+
+            #Power percent = power / max power
+            power_percent = ( float(EoAUniverse.entities['PC'].power) / \
+                            EoAUniverse.entities['PC'].max_power) * \
+                            100
+            
+            #Display a string representation of the percent converted to an int
+            self.persona['health_percent'].setText(str(int(hp_percent)))
+            self.persona['power_percent'].setText(str(int(power_percent)))
+            
+            #Update target health (if any target is selected)
+            #Update inventory (health, power, stats, money, etc)
+            
+        """Update certain elements"""
+        
+            
+            
+def null():
+    #empty dummy func
+    pass

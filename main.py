@@ -85,7 +85,7 @@ class Universe(DirectObject, EoAUniverse):
         """Set up GUI"""
         self.init_gui()
 
-        
+        self.GUI.update_gui_element()
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
         self.prev_time = 0.0
@@ -224,18 +224,16 @@ class Universe(DirectObject, EoAUniverse):
     def init_actors(self):
         """init_actors
         Setup actors"""
-        #Create a dictionary to hold all our actors
-        self.entities = {} 
         
         #Setup the PC entity
-        self.entities['PC'] = Entity(gravity_walker=True,modelName="boxman", 
+        self.entities['PC'] = EoAEntity(gravity_walker=True,modelName="boxman", 
                                     name='PC', startPos=(0,0,5), 
-                                    health=8, power=8,
+                                    max_health=521, max_power=82,
                                     stats={'agi':10, 'dex':19, 'int':19, 
                                             'sta':15, 'str':14, 'wis':18})
                
         for i in range(5):
-            self.entities['NPC_'+str(i)] = Entity(modelName="boxman", 
+            self.entities['NPC_'+str(i)] = EoAEntity(modelName="boxman", 
                         name='NPC_'+str(i),startPos=(random()*i+i,
                                                     random()*i+i,100))
         
@@ -262,198 +260,28 @@ class Universe(DirectObject, EoAUniverse):
         self.controls['camera_settings']['zoom'] = 20
      
     """=======GUI==============================================="""   
-    def init_gui(self):
-        """Set up the GUI dict and GUI nodes.  
-        Some elements will be toggleable via command keys (e.g. 'i' for 
-        inventory) so we set to node.hide() by default
-        
-        #create egg
-        #egg-texture-cards -o button_maps.egg -p 240,240 button_disabled.png
-        """
-        
-        #Create empty GUI dict
-        self.GUI = {'target_box':{},'inventory':{'text_nodes':{'stats':{}}},'persona':{}}
-                
-        '''
-        #Creating a CARD instead of using the egg maker
-        CM=CardMaker('')
-        card=base.a2dBottomLeft.attachNewNode(CM.generate())
-        card.setScale(.25)
-        #card.setTexture(tex)
-        card.setTransparency(1)
-        ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
-           text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
-        NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
-        '''
-        
-        """-----------CREATE 2D GUI ELEMENTS-------------------------"""
-        
-        """----Always on elements-----"""
-        
-        """Persona Box (Rename later?)"""
-        self.GUI['persona']['node_path'] = loader.loadModel(target_dir+\
-            '/gui/persona.egg')
-        #Reparent to the top right of the screen
-        self.GUI['persona']['node_path'].reparentTo(base.a2dTopRight)
-        self.GUI['persona']['node_path'].setTransparency(1)
-        self.GUI['persona']['node_path'].setScale(.6)
-        self.GUI['persona']['node_path'].setPos(-.31,0,-.32)
-        
-        #Person text
-        self.GUI['persona_name'] = OnscreenText(parent=\
-            self.GUI['persona']['node_path'], text = self.entities['PC'].name,\
-            pos=(0,.3), scale=0.085,fg=(1,1,1,1), \
-            align=TextNode.ACenter, mayChange=1)
-        
-        #HEALTH PERCENT
-        #y is inverted as the text is aligned to the top right
-        self.GUI['persona_health_percent'] = OnscreenText(parent=\
-            self.GUI['persona']['node_path'], text = '100', pos=(.38,.145), 
-            scale=0.04,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
-        
-        #POWER PERCENT
-        #y is inverted as the text is aligned to the top right
-        self.GUI['persona_power_percent'] = OnscreenText(parent=\
-            self.GUI['persona']['node_path'], text = '100', pos=(.38,-.024), 
-            scale=0.04,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
-        
-        """Target Box"""
-        #Create a parent node for the target box and the corresponding 
-        #   target text
-        #The container node is simply a node that will be the parent of the 
-        #   gui target box image node and the target box text node
-        self.GUI['target_box']['container_node'] = base.a2dTopRight.\
-            attachNewNode("target_box_container")
-            
-        #Load the target box model (really just a card with a texture on it)
-        self.GUI['target_box']['node_path'] = loader.loadModel(target_dir+\
-            '/gui/target_box.egg')
-        
-        #Attach the target box to the container node
-        self.GUI['target_box']['node_path'].reparentTo( \
-            self.GUI['target_box']['container_node'])
-        
-        #Make sure it's fully opaque
-        self.GUI['target_box']['node_path'].setTransparency(1)
-        self.GUI['target_box']['node_path'].setAlphaScale(1)
-        
-        #Set the target box container position and scale of the container
-        self.GUI['target_box']['container_node'].setPos(-.32,0,-.7)
-        self.GUI['target_box']['container_node'].setScale(.6)
-        
-        #Set the target box text, attach it to the container node
-        #we could onscreentext here instead, but textnode gives more control   
-        #Create a text node for the target text
-        self.GUI['target_box']['target_text'] = TextNode('gui_target_text')
-        self.GUI['target_box']['target_text'].setText("")
-        self.GUI['target_box']['target_text'].setAlign(TextNode.ACenter)
-
-        #Create a nodepath to attach the target text to
-        self.GUI['target_box']['target_text_node_path'] = \
-            self.GUI['target_box']['container_node'].attachNewNode(\
-            self.GUI['target_box']['target_text'])
-        self.GUI['target_box']['target_text_node_path'].setScale(0.07)
-        self.GUI['target_box']['target_text_node_path'].setPos(0,0,.32)
-
-        """----Other elements-----"""
-        """Inventory"""
-        #Create a container node to store the inventory image and text nodes in
-        #   similar to above
-        self.GUI['inventory']['container_node'] = base.aspect2d.\
-            attachNewNode("inventory_container")
-            
-        #Create the inventory image node and reparent it to the container
-        self.GUI['inventory']['node_path'] = loader.loadModel(target_dir+\
-            '/gui/inventory.egg')
-        self.GUI['inventory']['node_path'].reparentTo(\
-            self.GUI['inventory']['container_node'])
-            
-        #Set the position and scale of the inventory image node
-        self.GUI['inventory']['node_path'].setTransparency(1)
-        self.GUI['inventory']['node_path'].setAlphaScale(1)
-        
-        #Set the position, sacle, and hide the iventory container node
-        self.GUI['inventory']['container_node'].setPos(0,0,0)
-        self.GUI['inventory']['container_node'].hide()
-        self.GUI['inventory']['container_node'].setScale(.8)
-        
-        """Inventory texts"""
-        """TODO
-            Make a function to generate this instead of hardcoding"""
-        #Create text nodes for stats, health, power, etc
-        #This is the basic process:
-        #   -Create a text node for each stat
-        #   -Reparent the text node to an empty container node so we can set
-        #       position easier
-        #   -Reparent that empty container node for the text node to another
-        #       empty container node so the stat nodes are all grouped together
+    #def init_gui(self):
+    """Set up the GUI dict and GUI nodes.  
+    Some elements will be toggleable via command keys (e.g. 'i' for 
+    inventory) so we set to node.hide() by default
     
-        #Create a container node path to hold all the stat text nodes
-        #Attach the stats text node to the stats node path
-        self.GUI['inventory']['text_nodes']['stats']['stats_text_nodes'] = \
-            NodePath("inventory_stats_text_nodes")
-        
-        #Create text nodes for all the stats
-        #tweak the position later, see function for more details
-        self.gui_inventory_add_stat(stat='agi')
-        self.gui_inventory_add_stat(stat='dex', pos=(0,0,-1.5))
-        self.gui_inventory_add_stat(stat='int', pos=(0,0,-3))
-        self.gui_inventory_add_stat(stat='sta', pos=(0,0,-4.6))
-        self.gui_inventory_add_stat(stat='str', pos=(0,0,-6.2))
-        self.gui_inventory_add_stat(stat='wis', pos=(0,0,-7.7))
-        
-        #reparent the stat text container node to the inventory container node
-        self.GUI['inventory']['text_nodes']['stats']['stats_text_nodes'].\
-            reparentTo(self.GUI['inventory']['container_node'])        
+    #create egg
+    #egg-texture-cards -o button_maps.egg -p 240,240 button_disabled.png
+    """
             
-        #Scale and position the stats container node (which contains the 
-        #   stats_text_nodes
-        self.GUI['inventory']['text_nodes']['stats']['stats_text_nodes'].\
-            setScale(0.05)
-        self.GUI['inventory']['text_nodes']['stats']['stats_text_nodes'].\
-            setPos(.22,0,-.42)
-            
-        """------------
-        Set up config key - LATER WHEN REARRANGING CODE - MOVE TO KEY CONFIG
-        """
-        #inventory
-        self.accept ('i', self.toggle_gui_element, [self.GUI['inventory']\
-                ['container_node']])  # hit escape to quit!
+    '''
+    #Creating a CARD instead of using the egg maker
+    CM=CardMaker('')
+    card=base.a2dBottomLeft.attachNewNode(CM.generate())
+    card.setScale(.25)
+    #card.setTexture(tex)
+    card.setTransparency(1)
+    ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
+       text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
+    NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
+    '''
+      
         
-
-    """Function to create stat text nodes.  Need to be more extensible for
-    other text nodes in the inventory and other GUI elements"""
-    def gui_inventory_add_stat(self, stat='', pos=(0,0,0)):
-        """Adds a stat text node and attaches the text node"""
-        
-        #Create an empty text node container for the stat
-        self.GUI['inventory']['text_nodes']['stats'][stat] = TextNode(\
-        'inventory_stat_agi')
-        
-        #Set the initial text
-        #Get the stat from the PC entity
-        text = str(self.entities['PC'].stats[stat])
-        self.GUI['inventory']['text_nodes']['stats'][stat].setText(text)
-        
-        #Set alignment to the right
-        self.GUI['inventory']['text_nodes']['stats'][stat].setAlign(TextNode.\
-            ARight)
-            
-        #Create empty container node path for the stat
-        #   attach it to the base stats_text_nodes container which contains all
-        #   these empty container nodes for individual stats
-        #   Attach the text node we created to the base stat_text_nodes 
-        #   container so we can position the stat_text_nodes container and 
-        #   move all the stat text nodes at once
-        
-        self.GUI['inventory']['text_nodes']['stats'][stat+'_container'] = \
-            self.GUI['inventory']['text_nodes']['stats']\
-            ['stats_text_nodes'].attachNewNode(self.GUI['inventory']\
-            ['text_nodes']['stats'][stat])
-        #Position the text node container
-        self.GUI['inventory']['text_nodes']['stats'][stat+'_container'].\
-            setPos(pos)
-               
     """=======Skydome=============================================="""
     def init_skydome(self):
         #SKYBOX
@@ -763,20 +591,6 @@ class Universe(DirectObject, EoAUniverse):
                         EoA Universe Functions                       
                                                                        
         --------------------------------------------------------------------"""   
-    """=======Toggle GUI Element======================================"""
-    def toggle_gui_element(self, obj=None):
-        """Turns on / off a GUI element"""
-        try:
-            #Toggle node being shown / hidden
-            if obj.isHidden():
-                obj.show()
-            else:
-                obj.hide()
-        except:
-            #Not a good idea for a catch all normally, but we don't want to 
-            #break the game if we do catch something
-            "Object is hidden"
-            
     """=======Engage target======================================""" 
     def engage_target(self, force_state=None):
         """Engage target.  Will turn on autoattack (if configured)"""  
@@ -785,26 +599,26 @@ class Universe(DirectObject, EoAUniverse):
         #Already engaged, DISENGAGE
         if self.entities['PC'].is_engaged or force_state == 0:
             #They're already engaged, so disengage
-            self.GUI['target_box']['node_path'].setTexture(loader.loadTexture(\
+            self.GUI.target_box['node_path'].setTexture(loader.loadTexture(\
                 target_dir+'/gui/target_box.png'),1)
-            self.GUI['target_box']['target_text'].setTextColor(1,1,1,1)
+            self.GUI.target_box['target_text'].setTextColor(1,1,1,1)
             #Disengage
             self.entities['PC'].is_engaged = False
             #If state is forced, exit function
-            print "got here"
+            print "DISENGAGE"
             if force_state == 0:
                 return
                 
         #Not already engaged, ENGAGE
         elif not self.entities['PC'].is_engaged or force_state == 1:
             #They aren't engaged, so engage
-            self.GUI['target_box']['node_path'].setTexture(loader.loadTexture(\
+            self.GUI.target_box['node_path'].setTexture(loader.loadTexture(\
                 target_dir+'/gui/target_box_active.png'),1)
-            self.GUI['target_box']['target_text'].setTextColor(.8,.1,.1,1)
+            self.GUI.target_box['target_text'].setTextColor(.8,.1,.1,1)
             #Engage
             self.entities['PC'].is_engaged = True
             #If sate is forced, exit function
-            print "got here"
+            print "ENGAGE"
             if force_state == 1:
                 return
         
@@ -840,7 +654,7 @@ class Universe(DirectObject, EoAUniverse):
                 self.physics['collisions']['mouse']['current_node']
           
             #Update target box text
-            self.GUI['target_box']['target_text'].setText(self.entities['PC'].\
+            self.GUI.target_box['target_text'].setText(self.entities['PC'].\
                 target.name)
             
         else:
@@ -865,7 +679,7 @@ class Universe(DirectObject, EoAUniverse):
             
             #Clear the target text
             """TODO create a set_target_on_mouseclick method that updates targetbox"""
-            self.GUI['target_box']['target_text'].setText("")
+            self.GUI.target_box['target_text'].setText("")
 """------------------------------------------------------------------------"""
 
 """Instantiate the universe and call the built in Panda3d run() function""" 
