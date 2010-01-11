@@ -84,8 +84,9 @@ class Universe(DirectObject, EoAUniverse):
         
         """Set up GUI"""
         self.init_gui()
-
-        self.GUI.update_gui_element()
+        
+        #Take some fake damage
+        self.entities['PC'].take_damage(dmg_amt=20)
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
         self.prev_time = 0.0
@@ -144,7 +145,8 @@ class Universe(DirectObject, EoAUniverse):
         """Key map settings"""
         self.controls['key_map'] = {"cam_left":0, "cam_right":0, "cam_up":0,
                                     "cam_down":0, "mouse1":0, "mouse2": 0,
-                                    "mouse3": 0}
+                                    "mouse3": 0, "scroll_up":0, 
+                                    "scroll_down":0}
         
         #Camera Control Keys
         self.accept("arrow_left", self.controls_set_key, ["cam_left",1])
@@ -167,6 +169,9 @@ class Universe(DirectObject, EoAUniverse):
         #mouse2 is scroll wheel click
         self.accept("mouse2", self.controls_set_key, ["mouse2", 1])
         self.accept("mouse2-up", self.controls_set_key, ["mouse2", 0])
+        #mouse scroll
+        self.accept('wheel_up', self.controls_set_key,["scroll_up", 1 ]) 
+        self.accept('wheel_down', self.controls_set_key, ["scroll_down", 1])        
         self.accept ('escape', sys.exit)  # hit escape to quit!
         
         """--------COMMAND KEYS--------"""
@@ -182,8 +187,7 @@ class Universe(DirectObject, EoAUniverse):
         """
         
         self.controls['key_map'][key] = value
-        
-    
+           
     """=======Lights==============================================="""
     def init_lights(self):
         """init_lights
@@ -258,30 +262,7 @@ class Universe(DirectObject, EoAUniverse):
         #to control the camera
         self.controls['camera_settings']['timer'] = 0
         self.controls['camera_settings']['zoom'] = 20
-     
-    """=======GUI==============================================="""   
-    #def init_gui(self):
-    """Set up the GUI dict and GUI nodes.  
-    Some elements will be toggleable via command keys (e.g. 'i' for 
-    inventory) so we set to node.hide() by default
     
-    #create egg
-    #egg-texture-cards -o button_maps.egg -p 240,240 button_disabled.png
-    """
-            
-    '''
-    #Creating a CARD instead of using the egg maker
-    CM=CardMaker('')
-    card=base.a2dBottomLeft.attachNewNode(CM.generate())
-    card.setScale(.25)
-    #card.setTexture(tex)
-    card.setTransparency(1)
-    ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
-       text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
-    NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
-    '''
-      
-        
     """=======Skydome=============================================="""
     def init_skydome(self):
         #SKYBOX
@@ -371,19 +352,38 @@ class Universe(DirectObject, EoAUniverse):
             base.camera.setHpr(angledegrees, 0, 0)
             
         """Zoom camera in / out"""
+        #ZOOM IN
         if (self.controls['key_map']['cam_up']!=0):          
             #Zoom in
             base.camera.setY(base.camera, +(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] -= 1
-                  
+        
+        #Zoom in on mouse scroll forward
+        if (self.controls['key_map']['scroll_up']!=0):          
+            #Zoom in
+            base.camera.setY(base.camera, +(self.elapsed*20))
+            #Store the camera position
+            self.controls['camera_settings']['zoom'] -= 1
+            #Reset the scroll state to off
+            self.controls['key_map']['scroll_up'] = 0
+       
+        #ZOOM OUT
         if (self.controls['key_map']['cam_down']!=0): 
             #Zoom out
             base.camera.setY(base.camera, -(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] += 1
-            print self.controls['camera_settings']['zoom']
-        
+
+        #Zoom in on mouse scroll forward   
+        if (self.controls['key_map']['scroll_down']!=0):          
+            #Zoom in
+            base.camera.setY(base.camera, -(self.elapsed*20))
+            #Store the camera position
+            self.controls['camera_settings']['zoom'] -= 1
+            #Reset the scroll state to off
+            self.controls['key_map']['scroll_down'] = 0
+            
         #Update the Sun's position.
         #TODO - tie this in with day/night/time system
         self.lights['sunPos'] += 1
@@ -634,7 +634,7 @@ class Universe(DirectObject, EoAUniverse):
             picked_entity = self.physics['collisions']['mouse']\
                 ['current_node'].getPythonTag('entity')
             #print 'clicked' + str(picked_entity.name)
-            self.entities['PC'].target = picked_entity
+            self.entities['PC'].set_target(target=picked_entity)
             
             if self.physics['collisions']['mouse']['prev_target'] is not None \
             and self.physics['collisions']['mouse']['prev_target'] != \
@@ -652,10 +652,6 @@ class Universe(DirectObject, EoAUniverse):
             #node equal to the node the mouse is over)
             self.physics['collisions']['mouse']['prev_target'] = \
                 self.physics['collisions']['mouse']['current_node']
-          
-            #Update target box text
-            self.GUI.target_box['target_text'].setText(self.entities['PC'].\
-                target.name)
             
         else:
             """No entities are under the click, so clear the target and any
@@ -675,7 +671,7 @@ class Universe(DirectObject, EoAUniverse):
                 print "Could not turn off node's lighting"
                 
             #Clear the PC's current target
-            self.entities['PC'].target = None
+            self.entities['PC'].set_target(target=None)
             
             #Clear the target text
             """TODO create a set_target_on_mouseclick method that updates targetbox"""

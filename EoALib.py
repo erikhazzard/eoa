@@ -598,9 +598,14 @@ class EoAEntity(EoAUniverse):
     """----------------------------------------
         Target Functions
         ---------------------------------------"""
-    def set_target(self, target):
+    def set_target(self, target=None):
         """Set our actor's target"""
+        
+        #Set the target
         self.target = target
+        
+        #Update the target box GUI element
+        EoAUniverse.GUI.update_gui_element_target_box()
         
     def get_target(self):
         """Returns the actor's current target"""
@@ -609,8 +614,8 @@ class EoAEntity(EoAUniverse):
     """----------------------------------------
         Damage functions
         ---------------------------------------"""
-    def take_damage(self, dmg_amt, dmg_type, dmg_elemental, dmg_extra,
-                    dmg_amt_override):
+    def take_damage(self, dmg_amt=0, dmg_type=0, dmg_elemental=None, 
+                    dmg_extra=0, dmg_amt_override=0):
         """Takes an amount of damage and deals it based on character's stats
         
         dmg_amt: base amount of damage to take
@@ -625,7 +630,6 @@ class EoAEntity(EoAUniverse):
         final_dmg_amt = 0
         
         """Calculate dmg from physical / magic type"""
-        
         #Check for damage type
         #COMBAT
         if dmg_type == 0:
@@ -650,7 +654,7 @@ class EoAEntity(EoAUniverse):
         self.health -= final_dmg_amt
         
         #Update GUI elements associated with the entity
-        self.update_gui_elements()
+        EoAUniverse.GUI.update_gui_elements()
         
     
     """----------------------------------------
@@ -671,6 +675,26 @@ class EoAGUI(DirectObject):
     update_gui()
         called when a GUI update needs to be made - e.g. when the player takes 
         damage.
+        
+    Set up the GUI dict and GUI nodes.  
+    Some elements will be toggleable via command keys (e.g. 'i' for 
+    inventory) so we set to node.hide() by default
+    
+    #create egg
+    #egg-texture-cards is used to create animated textures essentially, but
+    #for now we'll just use it to generate a card + texture at once
+    #egg-texture-cards -o button_maps.egg -p 240,240 button_disabled.png            
+    '''
+    #Creating a CARD instead of using the egg maker
+    CM=CardMaker('')
+    card=base.a2dBottomLeft.attachNewNode(CM.generate())
+    card.setScale(.25)
+    #card.setTexture(tex)
+    card.setTransparency(1)
+    ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
+       text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
+    NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
+    '''
     """
     
     def __init__(self):
@@ -710,30 +734,46 @@ class EoAGUI(DirectObject):
         Shows name, health and power with percentages and health / power bars
         """
         #Persona Box (Rename later?)
-        self.persona['node_path'] = loader.loadModel(target_dir+\
+        self.persona['container_node'] = base.a2dTopRight.\
+            attachNewNode("persona_container")
+            
+        self.persona['persona_bg_node'] = loader.loadModel(target_dir+\
             '/gui/persona.egg')
-        #Reparent to the top right of the screen
-        self.persona['node_path'].reparentTo(base.a2dTopRight)
-        self.persona['node_path'].setTransparency(1)
-        self.persona['node_path'].setScale(.6)
-        self.persona['node_path'].setPos(-.31,0,-.32)
+        #Reparent to the persona container
+        self.persona['persona_bg_node'].reparentTo(self.persona['container_node'])
+        self.persona['container_node'].setTransparency(1)
+        self.persona['container_node'].setScale(.6)
+        self.persona['container_node'].setPos(-.31,0,-.32)
         
         #Person text
         self.persona['persona_name'] = OnscreenText(parent=\
-            self.persona['node_path'], text = EoAUniverse.entities['PC'].name,\
-            pos=(0,.3), scale=0.085,fg=(1,1,1,1), \
+            self.persona['container_node'], 
+            text=EoAUniverse.entities['PC'].name,
+            pos=(0,.3), scale=0.085, fg=(1,1,1,1),
             align=TextNode.ACenter, mayChange=1)
         
-        #HEALTH PERCENT
+        """HEALTH"""
+        #Text
         #y is inverted as the text is aligned to the top right
         self.persona['health_percent'] = OnscreenText(parent=\
-            self.persona['node_path'], text = '', pos=(.38,.145), 
+            self.persona['container_node'], text = '', pos=(.38,.145), 
             scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
         
-        #POWER PERCENT
+        #Image
+        #Persona Box (Rename later?)
+        #Use a DirectWaitBar, good for displaying status bars
+        self.persona['health_bar'] = DirectWaitBar(text = "", 
+            value=50, pos=(-.06,0,.155), scale=(.377,0,.182),
+            relief=None)
+        self.persona['health_bar'].setTransparency(1)
+        self.persona['health_bar'].reparentTo(self.persona['container_node'])
+        self.persona['health_bar'].setAlphaScale(.5)
+        
+        """POWER"""
+        #Text
         #y is inverted as the text is aligned to the top right
         self.persona['power_percent'] = OnscreenText(parent=\
-            self.persona['node_path'], text = '', pos=(.38,-.024), 
+            self.persona['persona_bg_node'], text = '', pos=(.38,-.024), 
             scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
         
     """=======Target Box==========
@@ -769,6 +809,7 @@ class EoAGUI(DirectObject):
         self.target_box['container_node'].setPos(-.32,0,-.7)
         self.target_box['container_node'].setScale(.6)
         
+        """Target name text"""
         #Set the target box text, attach it to the container node
         #we could onscreentext here instead, but textnode gives more control   
         #Create a text node for the target text
@@ -783,6 +824,11 @@ class EoAGUI(DirectObject):
         #Set the scale and position
         self.target_box['target_text_node_path'].setScale(0.07)
         self.target_box['target_text_node_path'].setPos(0,0,.32)
+        
+        """Target health percentage"""
+        self.target_box['target_health_percent'] = OnscreenText(parent=\
+            self.target_box['container_node'], text = '', pos=(.37,.175), 
+            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
 
     """=======Invetory=========================================
     INVENTORY SETUP
@@ -909,39 +955,72 @@ class EoAGUI(DirectObject):
             #break the game if we do catch something
             "Object is hidden"
             
-    """=======UPDATE GUI Element==========
+    """=======UPDATE GUI Element=======================================
     UPDATE GUI ELEMENT
     ======================="""  
-    def update_gui_element(self, gui_element=None):
+    def update_gui_elements(self, gui_element=None):
         """Updates the GUI, or a certain element if passed in"""
         
         """Update everything"""
         if gui_element is None:
             #If there is no GUI element passed in, update everything
             """Update Persona"""
-            #Calculate percent by taking a float of the health / power and 
-            #   divide it by the max health / power then multiple by 100
+            self.update_gui_element_persona()
             
-            #HP percent = health / max health
-            hp_percent =  ( float(EoAUniverse.entities['PC'].health) / \
-                            EoAUniverse.entities['PC'].max_health ) * \
-                            100
-
-            #Power percent = power / max power
-            power_percent = ( float(EoAUniverse.entities['PC'].power) / \
-                            EoAUniverse.entities['PC'].max_power) * \
-                            100
-            
-            #Display a string representation of the percent converted to an int
-            self.persona['health_percent'].setText(str(int(hp_percent)))
-            self.persona['power_percent'].setText(str(int(power_percent)))
-            
-            #Update target health (if any target is selected)
-            #Update inventory (health, power, stats, money, etc)
+            """Update target health (if any target is selected)"""
+            self.update_gui_element_target_box()
+                
+            """Update inventory (health, power, stats, money, etc)"""   
             
         """Update certain elements"""
         
+    """=======Update Persona====
+    UPDATE GUI ELEMENT PERSONA
+    ======================="""       
+    def update_gui_element_persona(self):
+        """Update the persona GUI element (top right box)"""
+
+        #Calculate percent by taking a float of the health / power and 
+        #   divide it by the max health / power then multiple by 100
+
+        #HP percent = health / max health
+        hp_percent =  ( float(EoAUniverse.entities['PC'].health) / \
+                        EoAUniverse.entities['PC'].max_health ) * \
+                        100
+
+        #Power percent = power / max power
+        power_percent = ( float(EoAUniverse.entities['PC'].power) / \
+                        EoAUniverse.entities['PC'].max_power) * \
+                        100
+
+        #Display a string representation of the percent converted to an int
+        self.persona['health_percent'].setText(str(int(hp_percent)))
+        self.persona['power_percent'].setText(str(int(power_percent)))
+        
+    """=======Update GUI Target Box====
+    UPDATE GUI ELEMENT TARGET BOX
+    ======================="""
+    def update_gui_element_target_box(self):
+        """Update the target box target text and health"""
+        
+        if EoAUniverse.entities['PC'].target is not None:
+            #Get and display target's health
+            target_health = ( float(EoAUniverse.entities['PC'].target.health) /\
+                        EoAUniverse.entities['PC'].target.max_health) * \
+                        100
             
+            #Update the target box target name text
+            self.target_box['target_text'].setText(EoAUniverse.entities['PC'].\
+                    target.name)  
+                    
+            #Update the target box percentage text
+            self.target_box['target_health_percent'].setText(str(int(\
+                target_health)))
+        
+        else:
+            #If no target, clear all text
+            self.target_box['target_text'].setText("")
+            self.target_box['target_health_percent'].setText("")
             
 def null():
     #empty dummy func
