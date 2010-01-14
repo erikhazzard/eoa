@@ -209,8 +209,8 @@ class EoAEntity(EoAUniverse):
         modelLocation = target_dir + "/models/%s" %(modelName)
         try:
             if not modelStates:
-                modelStates = {"idle":target_dir + "/models/%s-idle" %(modelName),
-                               "walk":target_dir + "/models/%s-walk" %(modelName)}
+                modelStates = {"idle":target_dir+"/models/%s-idle" %(modelName),
+                               "walk":target_dir+"/models/%s-walk" %(modelName)}
             else:
                 modelStates = modelStates
         except:
@@ -316,6 +316,11 @@ class EoAEntity(EoAUniverse):
         #Determine if the entity is engaged with another target
         self.is_engaged = False
         
+        #Some test stuff
+        self.equip_item(location="primary", model_location="Hand.R", 
+                        item="sword",item_pos=(0,.2,.1), item_hpr=(0,45,0),
+                        item_scale=.7)
+        
     """---------------------------------------------------------------------
         Init Functions
         --------------------------------------------------------------------"""
@@ -408,7 +413,9 @@ class EoAEntity(EoAUniverse):
         c_trav = base.cTrav
         # Create a sphere physics node
         # Note: Physics Actors are separate from animated Actors!
-        self.physics['collisionActor'] = render.attachNewNode(ActorNode("BoxActorNode"))
+        self.physics['collisionActor'] = render.attachNewNode(\
+            ActorNode("BoxActorNode"))
+            
         self.Actor.reparentTo(self.physics['collisionActor'])
         
         #Set the actor position relative to the collision sphere
@@ -418,21 +425,25 @@ class EoAEntity(EoAUniverse):
         
         # Associate the default PhysicsManager for this ActorNode
         #self.physics['collisionActor'] = self.Actor
-        base.physicsMgr.attachPhysicalNode(self.physics['collisionActor'].node())
+        base.physicsMgr.attachPhysicalNode(\
+            self.physics['collisionActor'].node())
         
-        # Let's set some default body parameters such as mass, and randomize our mass a bit
+        # Let's set some default body parameters such as mass, and randomize
+        #   our mass a bit
         self.physics['collisionActor'].node().getPhysicsObject().setMass(180)
             
-        # Because this object will be sending collisions(ie: acting as a From object, in Panda3d
-        # terms), it needs to contain a collision node presentation, as poly-poly tests are not
-        # supported in Panda3d
-        sphereColNode = self.physics['collisionActor'].attachNewNode(CollisionNode('sphere-cnode'))
+        # Because this object will be sending collisions(ie: acting as a From 
+        #   object, in Panda3d terms), it needs to contain a collision node 
+        #   presentation, as poly-poly tests are not supported in Panda3d
+        sphereColNode = self.physics['collisionActor'].attachNewNode(\
+            CollisionNode('sphere-cnode'))
         sphereColSphere = CollisionSphere(0, 0, 0, .5)
         sphereColNode.node().addSolid(sphereColSphere)
         
         # We only want to be treated as a sphere for incoming collisions
-        # Why do we have the wall bit set here too?  So that the player will react to this sphere
-        # and be pushed out of it with its wall sphere
+        # Why do we have the wall bit set here too?  So that the player will 
+        #   react to this sphere
+        #   and be pushed out of it with its wall sphere
         cMask = BitMask32()
         cMask.setBit(2)
         cMask.setBit(3)
@@ -565,25 +576,29 @@ class EoAEntity(EoAUniverse):
     """----------------------------------------
         Equip Functions
         ---------------------------------------"""
-    def equip_item(self, location, modelLocation, item, itemPos, itemHpr,
-                    itemScale=1):
+    def equip_item(self, location=None, model_node="modelRoot", 
+                    model_location=None, item=None, 
+                    item_pos=(0,0,0), item_hpr=(0,0,0), item_scale=1):
         """
         equipItem
         
         takes in a target actor, location and item / item settings
         """
         #Set the location on the target actor
-        self.body[location] = self.exposeJoint(None, 'modelRoot', 
-                    modelLocation)
+        #   self.body is our own dictionary, we are exposing a root to a key
+        #   e.g. self.body['primary'] = Hand.R (joint name)
+        #   NOTE - To view joint names, look at the .egg file
+        self.body[location] = self.Actor.exposeJoint(None, model_node, 
+                    model_location)
         
         #Create the initial model configuration
-        modelSetup = (target_dir + "/models/%s" %(item), itemPos, itemHpr, 1)
+        modelSetup = (target_dir + "/models/%s" %(item), item_pos, item_hpr, 1)
         
         #Configure the model
         model = loader.loadModel(modelSetup[0]) #load the model 
-        model.setPos(itemPos[0], itemPos[1], itemPos[2]) #set the position
-        model.setHpr(itemHpr[0], itemHpr[1], itemHpr[2]) #set the hpr
-        model.setScale(itemScale) #set the item's scale
+        model.setPos(item_pos[0], item_pos[1], item_pos[2]) #set the position
+        model.setHpr(item_hpr[0], item_hpr[1], item_hpr[2]) #set the hpr
+        model.setScale(item_scale) #set the item's scale
         
         
         #Reparent the model to the exposed joint(targetActor.body)
@@ -693,7 +708,8 @@ class EoAGUI(DirectObject):
     card.setTransparency(1)
     ost=OnscreenText(parent=base.a2dBottomLeft, font=loader.loadFont('cmss12'),
        text='press\nSPACE\nto cycle', fg=(0,0,0,1),shadow=(1,1,1,1), scale=.045)
-    NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().getCenter())
+    NodePath(ost).setPos(card.getBounds().getCenter()-ost.getBounds().\
+        getCenter())
     '''
     """
     
@@ -705,6 +721,9 @@ class EoAGUI(DirectObject):
         
         #Call to create the GUI elements
         self.draw_gui()
+        
+        #Update all the GUI elements
+        self.update_gui_elements()
     
     """=======Draw GUI==========
     DRAW GUI
@@ -740,7 +759,8 @@ class EoAGUI(DirectObject):
         self.persona['persona_bg_node'] = loader.loadModel(target_dir+\
             '/gui/persona.egg')
         #Reparent to the persona container
-        self.persona['persona_bg_node'].reparentTo(self.persona['container_node'])
+        self.persona['persona_bg_node'].reparentTo(\
+            self.persona['container_node'])
         self.persona['container_node'].setTransparency(1)
         self.persona['container_node'].setScale(.6)
         self.persona['container_node'].setPos(-.31,0,-.32)
@@ -756,14 +776,14 @@ class EoAGUI(DirectObject):
         #Text
         #y is inverted as the text is aligned to the top right
         self.persona['health_percent'] = OnscreenText(parent=\
-            self.persona['container_node'], text = '', pos=(.38,.145), 
-            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+            self.persona['container_node'], text = '', pos=(.38,.135), 
+            scale=0.065,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
         
-        #Image
-        #Persona Box (Rename later?)
+        #Health bar
         #Use a DirectWaitBar, good for displaying status bars
-        self.persona['health_bar'] = DirectWaitBar(text = "", 
-            value=50, pos=(-.06,0,.155), scale=(.377,0,.182),
+        self.persona['health_bar'] = DirectWaitBar(text = "",
+            barColor=(.9,.2,.2,1),
+            value=100, pos=(-.057,0,.149), scale=(.375,0,.28),
             relief=None)
         self.persona['health_bar'].setTransparency(1)
         self.persona['health_bar'].reparentTo(self.persona['container_node'])
@@ -773,8 +793,28 @@ class EoAGUI(DirectObject):
         #Text
         #y is inverted as the text is aligned to the top right
         self.persona['power_percent'] = OnscreenText(parent=\
-            self.persona['persona_bg_node'], text = '', pos=(.38,-.024), 
-            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+            self.persona['persona_bg_node'], text = '', pos=(.38,-.032), 
+            scale=0.065,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+            
+        #Power bar
+        #Use a DirectWaitBar, good for displaying status bars
+        self.persona['power_bar'] = DirectWaitBar(text = "", 
+            barColor=(.2,.2,.9,1),
+            value=100, pos=(-.057,0,-.0152), scale=(.375,0,.28),
+            relief=None)
+        self.persona['power_bar'].setTransparency(1)
+        self.persona['power_bar'].reparentTo(self.persona['container_node'])
+        self.persona['power_bar'].setAlphaScale(.5)
+        
+        """Persona GUI overlays
+        Top layer for persona image - e.g., borders for status bars"""
+        self.persona['persona_overlay'] = loader.loadModel(target_dir+\
+            '/gui/persona_overlay.egg')
+        self.persona['persona_overlay'].setTransparency(1)
+        self.persona['persona_overlay'].setAlphaScale(1)
+        #Reparent to the persona container
+        self.persona['persona_overlay'].reparentTo(\
+            self.persona['container_node'])
         
     """=======Target Box==========
     TARGET BOX SETUP
@@ -827,8 +867,19 @@ class EoAGUI(DirectObject):
         
         """Target health percentage"""
         self.target_box['target_health_percent'] = OnscreenText(parent=\
-            self.target_box['container_node'], text = '', pos=(.37,.175), 
-            scale=0.07,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+            self.target_box['container_node'], text = '', pos=(.355,.18), 
+            scale=0.06,fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        
+        #Health bar
+        #Use a DirectWaitBar, good for displaying status bars
+        self.target_box['health_bar'] = DirectWaitBar(text = "", 
+            barColor=(.9,.2,.2,1),
+            value=0, pos=(-.055,0,.197), scale=(.355,0,.28),
+            relief=None)
+        self.target_box['health_bar'].setTransparency(1)
+        self.target_box['health_bar'].reparentTo(\
+            self.target_box['container_node'])
+        self.target_box['health_bar'].setAlphaScale(.5)
 
     """=======Invetory=========================================
     INVENTORY SETUP
@@ -984,7 +1035,7 @@ class EoAGUI(DirectObject):
         #   divide it by the max health / power then multiple by 100
 
         #HP percent = health / max health
-        hp_percent =  ( float(EoAUniverse.entities['PC'].health) / \
+        health_percent =  ( float(EoAUniverse.entities['PC'].health) / \
                         EoAUniverse.entities['PC'].max_health ) * \
                         100
 
@@ -994,8 +1045,12 @@ class EoAGUI(DirectObject):
                         100
 
         #Display a string representation of the percent converted to an int
-        self.persona['health_percent'].setText(str(int(hp_percent)))
+        self.persona['health_percent'].setText(str(int(health_percent)))
+        #Update the health bar
+        self.persona['health_bar']['value'] = int(health_percent)
+        
         self.persona['power_percent'].setText(str(int(power_percent)))
+        self.persona['power_bar']['value'] = int(power_percent)
         
     """=======Update GUI Target Box====
     UPDATE GUI ELEMENT TARGET BOX
@@ -1016,11 +1071,30 @@ class EoAGUI(DirectObject):
             #Update the target box percentage text
             self.target_box['target_health_percent'].setText(str(int(\
                 target_health)))
+            
+            #Update the target box health bar
+            self.target_box['health_bar']['value'] = int(target_health)
         
         else:
             #If no target, clear all text
             self.target_box['target_text'].setText("")
             self.target_box['target_health_percent'].setText("")
+            #No target, so no health
+            self.target_box['health_bar']['value'] = 0
+    
+    def update_gui_element_target_box_engage(self, engaged=0):
+        """Update the target box texture if in combat"""
+        
+        if engaged is 0:
+            #If target is not engaged, set the targetbox's texture to default
+            self.target_box['node_path'].setTexture(loader.loadTexture(\
+                target_dir+'/gui/target_box.png'),1)
+            self.target_box['target_text'].setTextColor(1,1,1,1)
+        elif engaged is 1:
+            #If target is engaged, set the targetbox's texture to attack mode
+            self.target_box['node_path'].setTexture(loader.loadTexture(\
+                target_dir+'/gui/target_box_active.png'),1)
+            self.target_box['target_text'].setTextColor(.8,.1,.1,1)
             
 def null():
     #empty dummy func

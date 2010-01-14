@@ -10,7 +10,7 @@ from random import random
 from pandac.PandaModules import *
 
 loadPrcFileData("", """
-show-frame-rate-meter #f
+show-frame-rate-meter #t
 """)
 loadPrcFileData('',"""
 sync-video 0
@@ -84,25 +84,28 @@ class Universe(DirectObject, EoAUniverse):
         
         """Set up GUI"""
         self.init_gui()
-        
-        #Take some fake damage
-        self.entities['PC'].take_damage(dmg_amt=20)
+
         """------------TASKS---------------------------------------"""
         self.elapsed = 0.0
         self.prev_time = 0.0
         
         """Set up tasks"""
-        #Set up movement update
+        #Set up lighting updates
+        base.taskMgr.add(self.update_lighting, 'update_lighting')
+        
+        #Set up movement updates
         base.taskMgr.add(self.update_movement, 'update_movement')
         
-        #Set up camera update
+        #Set up camera updates
         base.taskMgr.add(self.update_camera, 'update_camera')
         
         #Keep track of entities, update animation if they are moving
-        base.taskMgr.add(self.update_entity_animations, 'update_entity_animations')
+        base.taskMgr.add(self.update_entity_animations,
+            'update_entity_animations')
         
         #Setup mouse collision test
-        base.taskMgr.add(self.update_mouse_collisions, 'update_mouse_collisions')
+        base.taskMgr.add(self.update_mouse_collisions, 
+            'update_mouse_collisions')
         
         """Set up skydome"""
         #self.init_skydome()
@@ -161,7 +164,8 @@ class Universe(DirectObject, EoAUniverse):
         #mouse keys
         #mouse1 is left click
         self.accept("mouse1", self.controls_set_key, ["mouse1", 1])
-        self.accept("mouse1", self.set_target_on_mouseclick)       #left-click grabs a piece
+        #Call functino to set the player's target
+        self.accept("mouse1", self.set_target_on_mouseclick)
         self.accept("mouse1-up", self.controls_set_key, ["mouse1", 0])
         #mouse3 is right click
         self.accept("mouse3", self.controls_set_key, ["mouse3", 1])
@@ -209,8 +213,8 @@ class Universe(DirectObject, EoAUniverse):
                                 ('DirectionalLight'))
         self.lights['dlight'].setColor(VBase4(1, 1, 1, 1))
         render.setLight(self.lights['dlight'])
-        self.lights['dlight'].setPos(1, 1, 1)
-        self.lights['dlight'].lookAt(0, 0, 0)
+        self.lights['dlight'].setPos(50,50,50)
+        self.lights['dlight'].lookAt(0,0,0)
         
         #Sun position
         self.lights['sunPos'] = 0
@@ -220,9 +224,28 @@ class Universe(DirectObject, EoAUniverse):
         self.lights['alight'].setColor(VBase4(0.1, 0.1, 0.1, 0.1))
         self.lights['alnp'] = render.attachNewNode(self.lights['alight'])
         render.setLight(self.lights['alnp'])
-    
-        #self.shader = loader.loadShader("g.sha")
-        #render.setShader(self.shader)
+        
+        #Create an invisible "sun" node which the dlight will lookAt()
+        self.lights['sun_node'] = render.attachNewNode("sun_node")
+        self.lights['sun_node'].setPos(10,10,10)
+        self.lights['sun_node'].setScale(2)
+        
+        #Create a sun model that will be a visual representation of where the
+        #   sun is.  Will be, essentially, in the opposite position of the 
+        #   fake sun node
+        self.lights['sun_model'] = loader.loadModel(target_dir+'/models/sphere.egg')
+        self.lights['sun_model'].reparentTo(render)
+        self.lights['sun_model'].setPos(10,10,10)
+        self.lights['sun_model'].setScale(2)
+        
+        self.lights['sky_box'] = loader.loadModel(target_dir+'/models/skybox.egg')
+        self.lights['sky_box'].reparentTo(render)
+        self.lights['sky_box'].setScale(5)
+        sky_tex = loader.loadTexture(\
+                target_dir+'/models/textures/clouds_bw.png')
+        sky_tex.setWrapU(Texture.WMRepeat)
+        sky_tex.setWrapV(Texture.WMRepeat)
+        self.lights['sky_box'].setTexture(sky_tex,1)
         
     """=======Actors==============================================="""
     def init_actors(self):
@@ -236,11 +259,12 @@ class Universe(DirectObject, EoAUniverse):
                                     stats={'agi':10, 'dex':19, 'int':19, 
                                             'sta':15, 'str':14, 'wis':18})
                
-        for i in range(5):
+        """for i in range(5):
             self.entities['NPC_'+str(i)] = EoAEntity(modelName="boxman", 
+                        max_health=100,
                         name='NPC_'+str(i),startPos=(random()*i+i,
-                                                    random()*i+i,100))
-        
+                                                    random()*i+i,80))
+        """
     """=======Camera==============================================="""
     def init_camera(self):
         """init_camera
@@ -325,16 +349,27 @@ class Universe(DirectObject, EoAUniverse):
         """Rotate Camera left / right"""
         if (self.controls['key_map']['cam_left']!=0):
             """Rotate the camera to the left"""
-            #increment the camera timer
+            #increment the camera timer, determines speed of camera rotation
             self.controls['camera_settings']['timer'] += .1
             angledegrees = self.controls['camera_settings']['timer'] * 50
             angleradians = angledegrees * (math.pi / 180.0)
             
+            #Set the X, Y as the zoom value * sine or cosine (respectively) of
+            #   angle radians, which is determined by rotating the camera left
+            #   or right around the character.  The zoom variable determines 
+            #   in essence, the zoom level which is calcuated simply as
+            #   self.elapsed * 20.  Notice this is also the value we use to
+            #   setY when we zoom in or out - no coincidence, these numbers
+            #   are the same because we want to know the location of the 
+            #   camera when we pan around the character (this location is
+            #   multiplied by sin or cos of angleradians
             base.camera.setPos(self.controls['camera_settings']['zoom']*\
                                 math.sin(angleradians),
                                -self.controls['camera_settings']['zoom']*\
                                math.cos(angleradians),
-                               3)
+                               base.camera.getZ())
+                               
+            #Set the beading / yaw (h) of the camera to point at the character
             base.camera.setHpr(angledegrees, 0, 0)
             
         if (self.controls['key_map']['cam_right']!=0):
@@ -348,16 +383,16 @@ class Universe(DirectObject, EoAUniverse):
                                 math.sin(angleradians),
                                -self.controls['camera_settings']['zoom']*\
                                math.cos(angleradians),
-                               3)
+                               base.camera.getZ())
             base.camera.setHpr(angledegrees, 0, 0)
             
         """Zoom camera in / out"""
         #ZOOM IN
-        if (self.controls['key_map']['cam_up']!=0):          
+        if (self.controls['key_map']['cam_up']!=0):   
             #Zoom in
             base.camera.setY(base.camera, +(self.elapsed*20))
             #Store the camera position
-            self.controls['camera_settings']['zoom'] -= 1
+            self.controls['camera_settings']['zoom'] -= self.elapsed*20
         
         #Zoom in on mouse scroll forward
         if (self.controls['key_map']['scroll_up']!=0):          
@@ -373,8 +408,8 @@ class Universe(DirectObject, EoAUniverse):
             #Zoom out
             base.camera.setY(base.camera, -(self.elapsed*20))
             #Store the camera position
-            self.controls['camera_settings']['zoom'] += 1
-
+            self.controls['camera_settings']['zoom'] += self.elapsed*20
+            
         #Zoom in on mouse scroll forward   
         if (self.controls['key_map']['scroll_down']!=0):          
             #Zoom in
@@ -384,14 +419,33 @@ class Universe(DirectObject, EoAUniverse):
             #Reset the scroll state to off
             self.controls['key_map']['scroll_down'] = 0
             
+        #self.entities['PC'].physics['playerWalker'].getCollisionsActive()
+        return Task.cont
+    
+    """======Update lighting========================================="""
+    def update_lighting(self, task):
         #Update the Sun's position.
         #TODO - tie this in with day/night/time system
-        self.lights['sunPos'] += 1
-        #print self.lights['sunPos']
+
         #Move the sun
-        self.lights['dlight'].setHpr(0,self.lights['sunPos'],0)
-        #Finish
-        #self.entities['PC'].physics['playerWalker'].getCollisionsActive()
+        angleDegrees = task.time * 100.0
+        angleRadians = angleDegrees * (math.pi / 180.0)
+        self.lights['sun_node'].setPos(75*math.sin(angleRadians), 
+            0,-75.0*math.cos(angleRadians))
+        
+        #Set the sun model's position based on the sun node.  Will be reversed
+        #   in the X direction
+        self.lights['sun_model'].setPos(-self.lights['sun_node'].getX(),
+        3, -self.lights['sun_node'].getZ())
+        
+        #self.lights['dlight'].setHpr(0,angleDegrees,0)
+        self.lights['dlight'].lookAt(self.lights['sun_node'])
+        
+        #self.lights['sky_box'].setHpr(0,angleDegrees,0)
+        
+        #Set the skybox's position to the camera's position so the camera
+        #   never touches the skybox, makes the skybox appear to never move
+        self.lights['sky_box'].setPos(base.camera.getPos())
         return Task.cont
     
     """=======update_entity_animations============================="""
@@ -584,8 +638,7 @@ class Universe(DirectObject, EoAUniverse):
         self.skybox.setShaderInput("sky", self.skycolor)
         render.setShaderInput('time', task.time)
         return Task.cont
-        
-         
+            
     """-----------------EoA Universe Functions---------------------------------
                                                                        
                         EoA Universe Functions                       
@@ -594,33 +647,34 @@ class Universe(DirectObject, EoAUniverse):
     """=======Engage target======================================""" 
     def engage_target(self, force_state=None):
         """Engage target.  Will turn on autoattack (if configured)"""  
+        
+        """Update Target Box GUI Element"""
+        #if there is a target, engage it
+        if self.entities['PC'].target is not None:
+            #Take some fake damage
+            self.entities['PC'].target.take_damage(dmg_amt=5)
             
-        """Update GUI"""
-        #Already engaged, DISENGAGE
-        if self.entities['PC'].is_engaged or force_state == 0:
-            #They're already engaged, so disengage
-            self.GUI.target_box['node_path'].setTexture(loader.loadTexture(\
-                target_dir+'/gui/target_box.png'),1)
-            self.GUI.target_box['target_text'].setTextColor(1,1,1,1)
-            #Disengage
-            self.entities['PC'].is_engaged = False
-            #If state is forced, exit function
-            print "DISENGAGE"
-            if force_state == 0:
-                return
-                
-        #Not already engaged, ENGAGE
-        elif not self.entities['PC'].is_engaged or force_state == 1:
-            #They aren't engaged, so engage
-            self.GUI.target_box['node_path'].setTexture(loader.loadTexture(\
-                target_dir+'/gui/target_box_active.png'),1)
-            self.GUI.target_box['target_text'].setTextColor(.8,.1,.1,1)
-            #Engage
-            self.entities['PC'].is_engaged = True
-            #If sate is forced, exit function
-            print "ENGAGE"
-            if force_state == 1:
-                return
+            #Already engaged, DISENGAGE
+            if self.entities['PC'].is_engaged or force_state == 0:
+                #They're already engaged, so disengage
+                self.GUI.update_gui_element_target_box_engage(engaged=0)
+                #Disengage
+                self.entities['PC'].is_engaged = False
+                #If state is forced, exit function
+                print "DISENGAGE"
+                if force_state == 0:
+                    return
+                    
+            #Not already engaged, ENGAGE
+            elif not self.entities['PC'].is_engaged or force_state == 1:
+                #They aren't engaged, so engage
+                self.GUI.update_gui_element_target_box_engage(engaged=1)
+                #Engage
+                self.entities['PC'].is_engaged = True
+                #If sate is forced, exit function
+                print "ENGAGE"
+                if force_state == 1:
+                    return
         
     """=======Set PC's target======================================"""
     def set_target_on_mouseclick(self):
@@ -674,7 +728,8 @@ class Universe(DirectObject, EoAUniverse):
             self.entities['PC'].set_target(target=None)
             
             #Clear the target text
-            """TODO create a set_target_on_mouseclick method that updates targetbox"""
+            """TODO create a set_target_on_mouseclick method that updates
+            targetbox"""
             self.GUI.target_box['target_text'].setText("")
 """------------------------------------------------------------------------"""
 
