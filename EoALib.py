@@ -3,6 +3,10 @@ End of Ages
 
 This file contains the majority EoA's library classes and functions
 
+Some sources 
+Panda3d demos
+Boxman Demo
+TKing EQ Interface
 """
 """System Imports"""
 import sys, math, os
@@ -251,11 +255,20 @@ class EoAEntity(EoAUniverse):
         
         """Set up entity body / items"""
         #Default body parts.  Different creatures have different parts
-        self.body = {'head':None, 'chest': None, 'shoulders':None, 'back':None,
-                            'arms':None, 'wrist':None, 'hands':None,
-                            'fingers':None,
-                            'waist':None, 'legs':None, 'feet':None,
-                            'primary': None, 'secondary': None, 'ranged':None}
+        self.body = {'head':{'joint':None, 'item':None}, 
+                    'chest':{'joint':None, 'item':None},
+                    'shoulders':{'joint':None, 'item':None},
+                    'back':{'joint':None, 'item':None},
+                    'arms':{'joint':None, 'item':None},
+                    'wrist':{'joint':None, 'item':None},
+                    'hands':{'joint':None, 'item':None},
+                    'fingers':{'joint':None, 'item':None},
+                    'waist':{'joint':None, 'item':None},
+                    'legs':{'joint':None, 'item':None},
+                    'feet':{'joint':None, 'item':None},
+                    'primary':{'joint':None, 'item':None},
+                    'secondary':{'joint':None, 'item':None},
+                    'ranged':{'joint':None, 'item':None},}
         
         #Our actor's inventory.
         self.inventory = []
@@ -309,18 +322,34 @@ class EoAEntity(EoAUniverse):
             self.init_name_node(self.name)
         else:
             self.init_name_node(self.name,nodePos='-')
-            
+                
         """Set the entity's target"""
         self.target = None
         
+        """Set up combat related attributes"""
         #Determine if the entity is engaged with another target
         self.is_engaged = False
         
+        #Set up a combat dictionary that contains attributes such as 
+        #   combat timer, time_min and time_max
+        # timer: contains current value of time for swings
+        # time_min: minimum time required to pass before allowed to swing
+        # timw_max: maximuim time where no waiting provides no additional dmg
+        self.combat = { 'timer': 0.0, 'time_min':0.0, 'time_max':0.0}
+        
+        self.combat_set_times()
+        
         #Some test stuff
+        """
+        premade sword
         self.equip_item(location="primary", model_location="Hand.R", 
                         item="sword",item_pos=(0,.2,.1), item_hpr=(0,45,0),
                         item_scale=.7)
-        
+        """
+        #my test sword
+        self.equip_item(location="primary", model_location="Hand.R", 
+                        item="sword",item_pos=(0,.2,.85), item_hpr=(0,0,0),
+                        item_scale=.1)
     """---------------------------------------------------------------------
         Init Functions
         --------------------------------------------------------------------"""
@@ -588,7 +617,7 @@ class EoAEntity(EoAUniverse):
         #   self.body is our own dictionary, we are exposing a root to a key
         #   e.g. self.body['primary'] = Hand.R (joint name)
         #   NOTE - To view joint names, look at the .egg file
-        self.body[location] = self.Actor.exposeJoint(None, model_node, 
+        self.body[location]['joint'] = self.Actor.exposeJoint(None, model_node, 
                     model_location)
         
         #Create the initial model configuration
@@ -602,8 +631,12 @@ class EoAEntity(EoAUniverse):
         
         
         #Reparent the model to the exposed joint(targetActor.body)
-        model.reparentTo(self.body[location])
+        model.reparentTo(self.body[location]['joint'])
         model.show()   
+        
+        """TODO
+        
+        Update character stats"""
        
     def unequip_item(self, location):
         """Unequip an item at the current location.
@@ -625,6 +658,24 @@ class EoAEntity(EoAUniverse):
     def get_target(self):
         """Returns the actor's current target"""
         return self.target
+ 
+    """----------------------------------------
+        Timer functions
+        ---------------------------------------"""
+    def combat_reset_timer(self):
+        """Set the timer to 0"""
+        self.combat['timer'] = 0.0
+    
+    def combat_set_times(self):
+        """Set the time_min and time_max"""
+        #Calculate the minimum time before a swing is allowed
+        self.combat['time_min'] = 2.0
+        self.combat['time_max'] = 7.0
+    
+    def combat_attack(self, target):
+        """Swing / peirce with weapon, call dmg function, reset timer"""
+        self.combat_reset_timer()
+    
         
     """----------------------------------------
         Damage functions
@@ -670,8 +721,7 @@ class EoAEntity(EoAUniverse):
         
         #Update GUI elements associated with the entity
         EoAUniverse.GUI.update_gui_elements()
-        
-    
+         
     """----------------------------------------
         Base Functions Overrides
         ---------------------------------------"""
@@ -718,6 +768,7 @@ class EoAGUI(DirectObject):
         self.target_box = {}
         self.inventory = {'text_nodes':{'stats':{}}}
         self.persona = {}
+        self.combat_bar = {}
         
         #Call to create the GUI elements
         self.draw_gui()
@@ -731,18 +782,25 @@ class EoAGUI(DirectObject):
     def draw_gui(self):
         """-----------CREATE GUI ELEMENTS-------------------------"""
         """Elements always on screen"""
+        #Load the persona box, shows the PC's name and health / power
         self.load_persona()
+        
+        #Load the target box, shows the target's name health %
         self.load_target_box()
-       
+        
         """Toggleable elements"""
+        #Load the inventory
         self.load_inventory()
+        
+        #Load the combat bar, shows status of swings
+        self.load_combat_bar()
+        
        
         """------------
         Set up config key - LATER WHEN REARRANGING CODE - MOVE TO KEY CONFIG
         """
         #inventory
-        self.accept ('i', self.toggle_gui_element, [self.inventory\
-                ['container_node']])  # hit escape to quit!
+        self.accept ('i', self.toggle_gui_element, [self.inventory])
         
     """=======Persona==========
     PERSONA SETUP
@@ -881,6 +939,49 @@ class EoAGUI(DirectObject):
             self.target_box['container_node'])
         self.target_box['health_bar'].setAlphaScale(.5)
 
+    """=======Combat Bar==========
+    COMBAT BAR SETUP
+    ======================="""
+    def load_combat_bar(self):
+        """Loads the combat bar, used for handling weapon swings"""
+        
+        #Create a parent node for the combat bar
+        #The container node is simply a node that will be the parent of the 
+        #   combar bar GUI element and the corresponding text / status bars
+        self.combat_bar['container_node'] = base.a2dBottomRight.\
+            attachNewNode("combat_bar_container")
+            
+        #Load the combat bar model (really just a card with a texture on it)
+        #Make this extensible later....
+        self.combat_bar['node_path'] = loader.loadModel(target_dir+\
+            '/gui/target_box.egg')
+        
+        #Attach the combat bar to the container node
+        self.combat_bar['node_path'].reparentTo( \
+            self.combat_bar['container_node'])
+        
+        #Make sure it's fully opaque
+        self.combat_bar['node_path'].setTransparency(1)
+        self.combat_bar['node_path'].setAlphaScale(1)
+        
+        #Hide the combat bar, we only show it when combat is engaged
+        self.combat_bar['container_node'].hide()
+        
+        #Set the position and scale
+        self.combat_bar['container_node'].setPos(-.32,0,0)
+        self.combat_bar['container_node'].setScale(.6)
+        
+        #Wait / status bar
+        #Use a DirectWaitBar, good for displaying status bars
+        self.combat_bar['status_bar'] = DirectWaitBar(text = "", 
+            barColor=(.9,.2,.2,1),
+            value=0, pos=(-.055,0,.197), scale=(.355,0,.28),
+            relief=None)
+        self.combat_bar['status_bar'].setTransparency(1)
+        self.combat_bar['status_bar'].reparentTo(\
+            self.combat_bar['container_node'])
+        self.combat_bar['status_bar'].setAlphaScale(.7)
+        
     """=======Invetory=========================================
     INVENTORY SETUP
     ======================="""    
@@ -905,9 +1006,11 @@ class EoAGUI(DirectObject):
         self.inventory['node_path'].setTransparency(1)
         self.inventory['node_path'].setAlphaScale(1)
         
+        #Hide the inventory, we only show it when the player asks for it
+        self.inventory['container_node'].hide()
+        
         #Set the position, sacle, and hide the iventory container node
         self.inventory['container_node'].setPos(0,0,0)
-        self.inventory['container_node'].hide()
         self.inventory['container_node'].setScale(.8)
         
         """Inventory text nodes"""
@@ -997,10 +1100,10 @@ class EoAGUI(DirectObject):
         
         try:
             #Toggle node being shown / hidden
-            if obj.isHidden():
-                obj.show()
+            if obj['container_node'].isHidden():
+                obj['container_node'].show()
             else:
-                obj.hide()
+                obj['container_node'].hide()
         except:
             #Not a good idea for a catch all normally, but we don't want to 
             #break the game if we do catch something

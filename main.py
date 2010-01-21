@@ -259,12 +259,12 @@ class Universe(DirectObject, EoAUniverse):
                                     stats={'agi':10, 'dex':19, 'int':19, 
                                             'sta':15, 'str':14, 'wis':18})
                
-        """for i in range(5):
+        for i in range(5):
             self.entities['NPC_'+str(i)] = EoAEntity(modelName="boxman", 
                         max_health=100,
                         name='NPC_'+str(i),startPos=(random()*i+i,
                                                     random()*i+i,80))
-        """
+        
     """=======Camera==============================================="""
     def init_camera(self):
         """init_camera
@@ -316,6 +316,10 @@ class Universe(DirectObject, EoAUniverse):
     """=======Update character movement============================"""
     def update_movement(self,task):
         """Task that updates the walking animation on our GravityWalker
+
+        TODO - Stop using gravity walker and implement ODE physics? 
+        If using ODE or something other than gravitywalker, handle controls
+        for movement here
         """
         
         # Adjust to match the walkcycle, to minimize sliding
@@ -451,7 +455,11 @@ class Universe(DirectObject, EoAUniverse):
     """=======update_entity_animations============================="""
     def update_entity_animations(self, task):
         """Check to see if any entities have moved since the last check
-        If entity d(xyz) has changed, play animation"""
+        If entity d(xyz) has changed, play animation
+        
+        Better way to handle this?  Every entity could have a task to
+        update its animation based on its state. 
+        """
         
         #Loop through all entities and animate them
         for i in self.entities:
@@ -496,8 +504,7 @@ class Universe(DirectObject, EoAUniverse):
             self.entities['NPC_0'].setPos(x,y,z)
         """
         return Task.cont
-        
-        
+               
     """=======update_mouse_collisions=============================="""       
     def update_mouse_collisions(self, task):    
         """Handle muse collisions for hover and click"""
@@ -638,44 +645,48 @@ class Universe(DirectObject, EoAUniverse):
         self.skybox.setShaderInput("sky", self.skycolor)
         render.setShaderInput('time', task.time)
         return Task.cont
+     
+    """=======Temporary Combat Counter============================="""
+    def combat_task(self, task):
+        """Handles combat timer - for swings, etc.
+        
+        This should be in the entity class, and should also be handled on the
+        server.
+        """
+        
+        #Get the swing timer based on how many seconds have elapsed since the
+        #   last frame was drawn.  If the combat timer is at or above the 
+        #   time_max for the entity's swing, do not add time to the counter
+        if self.entities['PC'].combat['timer'] <= self.entities['PC'].combat\
+            ['time_max']:
+            self.entities['PC'].combat['timer'] += globalClock.getDt()
             
+            """Status bar"""
+            #Update the status
+            self.GUI.combat_bar['status_bar']['value'] = self.entities['PC'].\
+                combat['timer'] / self.entities['PC'].combat['time_max'] * 100
+            
+            #Update the status bar color
+            if self.entities['PC'].combat['timer'] <= self.entities['PC'].\
+                combat['time_min']:
+                    #Set a 'disabled color' - maybe black?
+                    self.GUI.combat_bar['status_bar']['barColor'] = \
+                        (.5,.5,.5,1)
+                    self.GUI.combat_bar['status_bar'].setAlphaScale(.9)
+            else:
+                #Color should change from maybe red to green? Low to high....
+                self.GUI.combat_bar['status_bar']['barColor'] = \
+                        (.9,.2,.2,1)
+        #print for debugging
+        print self.entities['PC'].combat['timer']
+        
+        return Task.cont
+        
     """-----------------EoA Universe Functions---------------------------------
                                                                        
                         EoA Universe Functions                       
                                                                        
-        --------------------------------------------------------------------"""   
-    """=======Engage target======================================""" 
-    def engage_target(self, force_state=None):
-        """Engage target.  Will turn on autoattack (if configured)"""  
-        
-        """Update Target Box GUI Element"""
-        #if there is a target, engage it
-        if self.entities['PC'].target is not None:
-            #Take some fake damage
-            self.entities['PC'].target.take_damage(dmg_amt=5)
-            
-            #Already engaged, DISENGAGE
-            if self.entities['PC'].is_engaged or force_state == 0:
-                #They're already engaged, so disengage
-                self.GUI.update_gui_element_target_box_engage(engaged=0)
-                #Disengage
-                self.entities['PC'].is_engaged = False
-                #If state is forced, exit function
-                print "DISENGAGE"
-                if force_state == 0:
-                    return
-                    
-            #Not already engaged, ENGAGE
-            elif not self.entities['PC'].is_engaged or force_state == 1:
-                #They aren't engaged, so engage
-                self.GUI.update_gui_element_target_box_engage(engaged=1)
-                #Engage
-                self.entities['PC'].is_engaged = True
-                #If sate is forced, exit function
-                print "ENGAGE"
-                if force_state == 1:
-                    return
-        
+        --------------------------------------------------------------------"""  
     """=======Set PC's target======================================"""
     def set_target_on_mouseclick(self):
         """Set the player's target to an entity based on mouse click"""
@@ -730,7 +741,73 @@ class Universe(DirectObject, EoAUniverse):
             #Clear the target text
             """TODO create a set_target_on_mouseclick method that updates
             targetbox"""
-            self.GUI.target_box['target_text'].setText("")
+            self.GUI.target_box['target_text'].setText("")        
+    
+    """=======Engage target======================================""" 
+    def engage_target(self, force_state=None):
+        """Engage target.  Will turn on autoattack (if configured)
+        
+        THIS SHOULD BE IN ENTITY CLASS
+        
+        Idea - press button to engage attack mode?
+                Once engaged, if autoattack is enabled automatically handle
+                swings
+                If autoattack is not enabled, swing manually on some key press
+
+        """  
+        
+        """Update Target Box GUI Element"""
+        #if there is a target, engage it
+        if self.entities['PC'].target is not None:
+            self.accept ('x', self.combat_attack, [])
+            #Add a task to control the combat
+            base.taskMgr.add(self.combat_task, 'combat_task')
+            
+            #Show the combat bar
+            self.GUI.toggle_gui_element(obj=self.GUI.combat_bar)
+    
+            #Reset combat / (spell) timer
+            self.entities['PC'].combat_reset_timer()
+            
+            #Take some fake damage
+            self.entities['PC'].target.take_damage(dmg_amt=5)
+            
+            #Already engaged, DISENGAGE
+            if self.entities['PC'].is_engaged or force_state == 0:
+                #They're already engaged, so disengage
+                self.GUI.update_gui_element_target_box_engage(engaged=0)
+                #Disengage
+                self.entities['PC'].is_engaged = False
+                #If state is forced, exit function
+                print "DISENGAGE"
+                
+                #Remove combat task
+                #TODO - make names exentisble, attach combat task to EACH 
+                #   entitiy
+                base.taskMgr.remove('combat_task')
+                if force_state == 0:
+                    return
+                    
+            #Not already engaged, ENGAGE
+            elif not self.entities['PC'].is_engaged or force_state == 1:
+                #They aren't engaged, so engage
+                self.GUI.update_gui_element_target_box_engage(engaged=1)
+                #Engage
+                self.entities['PC'].is_engaged = True
+                #If sate is forced, exit function
+                print "ENGAGE"
+                if force_state == 1:
+                    return
+    
+    def combat_attack(self):
+        """Swing / use wepaon.  This should be in entity class"""
+        
+        #If the combat timer is greater than or equal to the minumum time
+        #   required to swing, then swing the weapon
+        #       -Do dmg, reset timer to 0, update GUI
+        if self.entities['PC'].combat['timer'] >= self.entities['PC'].combat\
+            ['time_min']:
+            self.entities['PC'].combat['timer'] = 0.0
 """------------------------------------------------------------------------"""
 
 """Instantiate the universe and call the built in Panda3d run() function""" 
