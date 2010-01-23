@@ -337,7 +337,13 @@ class EoAEntity(EoAUniverse):
         # timw_max: maximuim time where no waiting provides no additional dmg
         self.combat = { 'timer': 0.0, 'time_min':0.0, 'time_max':0.0}
         
+        #Setup the combat timer times
         self.combat_set_times()
+        
+        #Temp for now - set up attack control
+        """--------COMMAND KEYS--------"""
+        #autoattack
+        self.accept ('z', self.engage_target)  # hit escape to quit!
         
         #Some test stuff
         """
@@ -350,6 +356,10 @@ class EoAEntity(EoAUniverse):
         self.equip_item(location="primary", model_location="Hand.R", 
                         item="sword",item_pos=(0,.2,.85), item_hpr=(0,0,0),
                         item_scale=.1)
+                                #my test sword
+        self.equip_item(location="secondary", model_location="Hand.L", 
+                        item="shield",item_pos=(0,-.5,.5), item_hpr=(90,0,120),
+                        item_scale=.3)
     """---------------------------------------------------------------------
         Init Functions
         --------------------------------------------------------------------"""
@@ -634,6 +644,10 @@ class EoAEntity(EoAUniverse):
         model.reparentTo(self.body[location]['joint'])
         model.show()   
         
+        #Set a bitmask so mouse collisons tests aren't tried.  If this isn't 
+        #   set to some other value, the mouse will try to collide with it
+        #   and this will slow things down a lot with high poly models
+        model.setCollideMask(BitMask32.bit(18))
         """TODO
         
         Update character stats"""
@@ -654,6 +668,8 @@ class EoAEntity(EoAUniverse):
         
         #Update the target box GUI element
         EoAUniverse.GUI.update_gui_element_target_box()
+        #Reset the combat timer (if it is set)
+        self.combat_reset_timer()
         
     def get_target(self):
         """Returns the actor's current target"""
@@ -676,7 +692,107 @@ class EoAEntity(EoAUniverse):
         """Swing / peirce with weapon, call dmg function, reset timer"""
         self.combat_reset_timer()
     
+    """Combat task"""
+    def combat_task(self, task):
+        """Handles combat timer - for swings, etc.
         
+        This should be in the entity class, and should also be handled on the
+        server.
+        """
+        
+        #Get the swing timer based on how many seconds have elapsed since the
+        #   last frame was drawn.  If the combat timer is at or above the 
+        #   time_max for the entity's swing, do not add time to the counter
+        if self.combat['timer'] <= self.combat['time_max']:
+            self.combat['timer'] += globalClock.getDt()
+            
+            """Status bar"""
+            #Update the status
+            EoAUniverse.GUI.combat_bar['status_bar']['value'] = self.\
+                combat['timer'] / self.combat['time_max'] * 100
+            
+            #Update the status bar color
+            if self.combat['timer'] <= self.combat['time_min']:
+                    #Set a 'disabled color' - maybe black?
+                    EoAUniverse.GUI.combat_bar['status_bar']['barColor'] = \
+                        (.5,.5,.5,1)
+                    EoAUniverse.GUI.combat_bar['status_bar'].setAlphaScale(.9)
+            else:
+                #Color should change from maybe red to green? Low to high....
+                EoAUniverse.GUI.combat_bar['status_bar']['barColor'] = \
+                        (.9,.2,.2,1)
+        #print for debugging
+        #print self.entities['PC'].combat['timer']
+        
+        return Task.cont
+        
+    """Engage target"""
+    """=======Engage target======================================""" 
+    def engage_target(self, force_state=None):
+        """Engage target.  Will turn on autoattack (if configured)
+        
+        THIS SHOULD BE IN ENTITY CLASS
+        
+        Idea - press button to engage attack mode?
+                Once engaged, if autoattack is enabled automatically handle
+                swings
+                If autoattack is not enabled, swing manually on some key press
+
+        """  
+        
+        """Update Target Box GUI Element"""
+        #if there is a target, engage it
+        if self.target is not None:
+            self.accept('x', self.combat_attack, [])
+            #Add a task to control the combat
+            base.taskMgr.add(self.combat_task, str(self.name) + '_combat_task')
+            
+            #Show the combat bar
+            EoAUniverse.GUI.toggle_gui_element(obj=EoAUniverse.GUI.combat_bar)
+    
+            #Reset combat / (spell) timer
+            self.combat_reset_timer()
+            
+            #Already engaged, DISENGAGE
+            if self.is_engaged or force_state == 0:
+                #They're already engaged, so disengage
+                EoAUniverse.GUI.update_gui_element_target_box_engage(engaged=0)
+                #Disengage
+                self.is_engaged = False
+                #If state is forced, exit function
+                print "DISENGAGE"
+                
+                #Remove combat task
+                #TODO - make names exentisble, attach combat task to EACH 
+                #   entitiy
+                base.taskMgr.remove(str(self.name) + '_combat_task')
+                if force_state == 0:
+                    return
+                    
+            #Not already engaged, ENGAGE
+            elif not self.is_engaged or force_state == 1:
+                #They aren't engaged, so engage
+                EoAUniverse.GUI.update_gui_element_target_box_engage(engaged=1)
+                #Engage
+                EoAUniverse.entities['PC'].is_engaged = True
+                #If sate is forced, exit function
+                print "ENGAGE"
+                if force_state == 1:
+                    return
+    
+    """Swing weapon"""
+    def combat_attack(self):
+        """Swing / use wepaon.  This should be in entity class"""
+        
+        #If the combat timer is greater than or equal to the minumum time
+        #   required to swing, then swing the weapon
+        #       -Do dmg, reset timer to 0, update GUI
+        if self.combat['timer'] >= self.combat['time_min']:
+            """Legitimate swing, reset timer and do some damage"""
+            self.combat['timer'] = 0.0
+                        #Take some fake damage
+            self.target.take_damage(dmg_amt=5)
+            
     """----------------------------------------
         Damage functions
         ---------------------------------------"""

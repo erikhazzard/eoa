@@ -161,10 +161,17 @@ class Universe(DirectObject, EoAUniverse):
         self.accept("arrow_up-up", self.controls_set_key, ["cam_up",0])
         self.accept("arrow_down-up", self.controls_set_key, ["cam_down",0])
 
+        """Mouse settings"""
+        #Previous mouse coordinates, used for camera and dragging elements
+        self.controls['mouse_prev_x'] = 0
+        self.controls['mouse_prev_y'] = 0
+        self.controls['mouse_camera_dragging'] = False
+        
         #mouse keys
         #mouse1 is left click
-        self.accept("mouse1", self.controls_set_key, ["mouse1", 1])
-        #Call functino to set the player's target
+        #Call function to set the player's target
+        #set_target_on_mouseclick also sets the mouse1 key value...need to make
+        #   this more extensible
         self.accept("mouse1", self.set_target_on_mouseclick)
         self.accept("mouse1-up", self.controls_set_key, ["mouse1", 0])
         #mouse3 is right click
@@ -177,11 +184,6 @@ class Universe(DirectObject, EoAUniverse):
         self.accept('wheel_up', self.controls_set_key,["scroll_up", 1 ]) 
         self.accept('wheel_down', self.controls_set_key, ["scroll_down", 1])        
         self.accept ('escape', sys.exit)  # hit escape to quit!
-        
-        """--------COMMAND KEYS--------"""
-        #autoattack
-        self.accept ('z', self.engage_target)  # hit escape to quit!
-
         
     def controls_set_key(self, key, value):
         """Set up keyboard keys
@@ -200,7 +202,7 @@ class Universe(DirectObject, EoAUniverse):
         self.filters = CommonFilters(base.win, base.cam)
         filterok = self.filters.setBloom(blend=(0,0,0,.5), desat=-0.5, 
                         intensity=1.0, size="small")
-        if (filterok == False):
+        if filterok == False:
             print "Your video card cannot handle this"
             return
         self.glowSize=.2
@@ -350,8 +352,9 @@ class Universe(DirectObject, EoAUniverse):
         # for framerate-independent movement.
         self.elapsed = globalClock.getDt()
         
+        """---------Keyboard movement-------------------"""
         """Rotate Camera left / right"""
-        if (self.controls['key_map']['cam_left']!=0):
+        if self.controls['key_map']['cam_left'] !=0:
             """Rotate the camera to the left"""
             #increment the camera timer, determines speed of camera rotation
             self.controls['camera_settings']['timer'] += .1
@@ -369,14 +372,14 @@ class Universe(DirectObject, EoAUniverse):
             #   multiplied by sin or cos of angleradians
             base.camera.setPos(self.controls['camera_settings']['zoom']*\
                                 math.sin(angleradians),
-                               -self.controls['camera_settings']['zoom']*\
-                               math.cos(angleradians),
-                               base.camera.getZ())
+                                -self.controls['camera_settings']['zoom']*\
+                                math.cos(angleradians),
+                                base.camera.getZ())
                                
-            #Set the beading / yaw (h) of the camera to point at the character
-            base.camera.setHpr(angledegrees, 0, 0)
+            #Set the heading / yaw (h) of the camera to point at the character
+            base.camera.setHpr(angledegrees, 0, 0)  
             
-        if (self.controls['key_map']['cam_right']!=0):
+        if self.controls['key_map']['cam_right'] !=0:
             """Rotate the camera to the right"""
             #increment the camera timer
             self.controls['camera_settings']['timer'] -= .1
@@ -385,44 +388,101 @@ class Universe(DirectObject, EoAUniverse):
 
             base.camera.setPos(self.controls['camera_settings']['zoom']*\
                                 math.sin(angleradians),
-                               -self.controls['camera_settings']['zoom']*\
-                               math.cos(angleradians),
-                               base.camera.getZ())
+                                -self.controls['camera_settings']['zoom']*\
+                                math.cos(angleradians),
+                                base.camera.getZ())
             base.camera.setHpr(angledegrees, 0, 0)
             
         """Zoom camera in / out"""
         #ZOOM IN
-        if (self.controls['key_map']['cam_up']!=0):   
+        if self.controls['key_map']['cam_up'] !=0:   
             #Zoom in
             base.camera.setY(base.camera, +(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] -= self.elapsed*20
-        
-        #Zoom in on mouse scroll forward
-        if (self.controls['key_map']['scroll_up']!=0):          
-            #Zoom in
-            base.camera.setY(base.camera, +(self.elapsed*20))
-            #Store the camera position
-            self.controls['camera_settings']['zoom'] -= 1
-            #Reset the scroll state to off
-            self.controls['key_map']['scroll_up'] = 0
-       
+
         #ZOOM OUT
-        if (self.controls['key_map']['cam_down']!=0): 
+        if self.controls['key_map']['cam_down'] !=0: 
             #Zoom out
             base.camera.setY(base.camera, -(self.elapsed*20))
             #Store the camera position
             self.controls['camera_settings']['zoom'] += self.elapsed*20
+        
+        """---------Mouse movement-------------------"""
+        #Zoom in on mouse scroll forward
+        if self.controls['key_map']['scroll_up'] !=0:          
+            #Zoom in
+            base.camera.setY(base.camera, +(self.elapsed*20))
+            #Store the camera position
+            self.controls['camera_settings']['zoom'] -= .1
+            #Reset the scroll state to off
+            self.controls['key_map']['scroll_up'] = 0
             
         #Zoom in on mouse scroll forward   
-        if (self.controls['key_map']['scroll_down']!=0):          
+        if self.controls['key_map']['scroll_down'] !=0:             
             #Zoom in
             base.camera.setY(base.camera, -(self.elapsed*20))
             #Store the camera position
-            self.controls['camera_settings']['zoom'] -= 1
+            self.controls['camera_settings']['zoom'] -= .1
             #Reset the scroll state to off
             self.controls['key_map']['scroll_down'] = 0
             
+        #Move camera left / right by mouseclick
+        #mous3 is right click button
+        if self.controls['key_map']['mouse3'] != 0:
+            """Rotate the camera to the left or right"""
+            
+            #We know right click is being held, checked to see if it's moving
+            #   left or right
+            if base.mouseWatcherNode.hasMouse():
+                cur_mouse_x=base.mouseWatcherNode.getMouseX()
+                cur_mouse_y=base.mouseWatcherNode.getMouseY()
+            else:
+                #The base does not have the mouse watcher node, meaning the 
+                #   mouse is probably outside the game window.  If this is
+                #   the case, set the cur mouse x and y to the prev coords
+                cur_mouse_x = self.controls['mouse_prev_x']
+                cur_mouse_y = self.controls['mouse_prev_y']
+            
+            #Check to see if the camera is being dragged.  This ensures that
+            #   the camera won't move when the mouse is first clicked
+            if self.controls['mouse_camera_dragging'] is True:
+                #compare the previous mouse x position (if it exists).  If the
+                #   cur position is greater, it means the mouse has moved to the 
+                #   left side of the screen, so update the camera position
+                if cur_mouse_x > self.controls['mouse_prev_x']:
+                    #Camera will be moving to the right
+                    self.controls['camera_settings']['timer'] -= .1
+                    
+                elif cur_mouse_x < self.controls['mouse_prev_x']:
+                    #Camera will be moving to the left
+                    self.controls['camera_settings']['timer'] += .1
+                
+                #Move the camera
+                angledegrees = self.controls['camera_settings']['timer'] * 50
+                angleradians = angledegrees * (math.pi / 180.0)
+                
+                #Set the X, Y as the zoom value ... see camera rotation code 
+                #   above for more details
+                base.camera.setPos(self.controls['camera_settings']['zoom']*\
+                                    math.sin(angleradians),
+                                    -self.controls['camera_settings']['zoom']*\
+                                    math.cos(angleradians),
+                                    base.camera.getZ())
+                                   
+                #Set the yaw of the camera to point at the character
+                base.camera.setHpr(angledegrees, 0, 0) 
+
+            #Set current x,y mouse coordinates as previous coordinates so we
+            #   can do comparisons the next time the function is called
+            self.controls['mouse_prev_x'] = cur_mouse_x
+            self.controls['mouse_prev_y'] = cur_mouse_y
+            self.controls['mouse_camera_dragging'] = True        
+        elif self.controls['key_map']['mouse3'] == 0:
+            #The right click button has been depressed, so the camera is
+            #   no longer being dragged
+            self.controls['mouse_camera_dragging'] = False
+        
         #self.entities['PC'].physics['playerWalker'].getCollisionsActive()
         return Task.cont
     
@@ -645,42 +705,6 @@ class Universe(DirectObject, EoAUniverse):
         self.skybox.setShaderInput("sky", self.skycolor)
         render.setShaderInput('time', task.time)
         return Task.cont
-     
-    """=======Temporary Combat Counter============================="""
-    def combat_task(self, task):
-        """Handles combat timer - for swings, etc.
-        
-        This should be in the entity class, and should also be handled on the
-        server.
-        """
-        
-        #Get the swing timer based on how many seconds have elapsed since the
-        #   last frame was drawn.  If the combat timer is at or above the 
-        #   time_max for the entity's swing, do not add time to the counter
-        if self.entities['PC'].combat['timer'] <= self.entities['PC'].combat\
-            ['time_max']:
-            self.entities['PC'].combat['timer'] += globalClock.getDt()
-            
-            """Status bar"""
-            #Update the status
-            self.GUI.combat_bar['status_bar']['value'] = self.entities['PC'].\
-                combat['timer'] / self.entities['PC'].combat['time_max'] * 100
-            
-            #Update the status bar color
-            if self.entities['PC'].combat['timer'] <= self.entities['PC'].\
-                combat['time_min']:
-                    #Set a 'disabled color' - maybe black?
-                    self.GUI.combat_bar['status_bar']['barColor'] = \
-                        (.5,.5,.5,1)
-                    self.GUI.combat_bar['status_bar'].setAlphaScale(.9)
-            else:
-                #Color should change from maybe red to green? Low to high....
-                self.GUI.combat_bar['status_bar']['barColor'] = \
-                        (.9,.2,.2,1)
-        #print for debugging
-        print self.entities['PC'].combat['timer']
-        
-        return Task.cont
         
     """-----------------EoA Universe Functions---------------------------------
                                                                        
@@ -691,8 +715,10 @@ class Universe(DirectObject, EoAUniverse):
     def set_target_on_mouseclick(self):
         """Set the player's target to an entity based on mouse click"""
         
-        #if self.physics['collisions']['mouse']['prev_node'] is not None:
-        #    print self.physics['collisions']['mouse']['prev_node']
+        #Set update mouse1 key values
+        self.controls_set_key("mouse1", 1)
+        
+        #Set the target if a node is under the mouse
         if self.physics['collisions']['mouse']['current_node'] is not None:
             """If something was clicked"""
             
@@ -742,72 +768,7 @@ class Universe(DirectObject, EoAUniverse):
             """TODO create a set_target_on_mouseclick method that updates
             targetbox"""
             self.GUI.target_box['target_text'].setText("")        
-    
-    """=======Engage target======================================""" 
-    def engage_target(self, force_state=None):
-        """Engage target.  Will turn on autoattack (if configured)
-        
-        THIS SHOULD BE IN ENTITY CLASS
-        
-        Idea - press button to engage attack mode?
-                Once engaged, if autoattack is enabled automatically handle
-                swings
-                If autoattack is not enabled, swing manually on some key press
-
-        """  
-        
-        """Update Target Box GUI Element"""
-        #if there is a target, engage it
-        if self.entities['PC'].target is not None:
-            self.accept ('x', self.combat_attack, [])
-            #Add a task to control the combat
-            base.taskMgr.add(self.combat_task, 'combat_task')
             
-            #Show the combat bar
-            self.GUI.toggle_gui_element(obj=self.GUI.combat_bar)
-    
-            #Reset combat / (spell) timer
-            self.entities['PC'].combat_reset_timer()
-            
-            #Take some fake damage
-            self.entities['PC'].target.take_damage(dmg_amt=5)
-            
-            #Already engaged, DISENGAGE
-            if self.entities['PC'].is_engaged or force_state == 0:
-                #They're already engaged, so disengage
-                self.GUI.update_gui_element_target_box_engage(engaged=0)
-                #Disengage
-                self.entities['PC'].is_engaged = False
-                #If state is forced, exit function
-                print "DISENGAGE"
-                
-                #Remove combat task
-                #TODO - make names exentisble, attach combat task to EACH 
-                #   entitiy
-                base.taskMgr.remove('combat_task')
-                if force_state == 0:
-                    return
-                    
-            #Not already engaged, ENGAGE
-            elif not self.entities['PC'].is_engaged or force_state == 1:
-                #They aren't engaged, so engage
-                self.GUI.update_gui_element_target_box_engage(engaged=1)
-                #Engage
-                self.entities['PC'].is_engaged = True
-                #If sate is forced, exit function
-                print "ENGAGE"
-                if force_state == 1:
-                    return
-    
-    def combat_attack(self):
-        """Swing / use wepaon.  This should be in entity class"""
-        
-        #If the combat timer is greater than or equal to the minumum time
-        #   required to swing, then swing the weapon
-        #       -Do dmg, reset timer to 0, update GUI
-        if self.entities['PC'].combat['timer'] >= self.entities['PC'].combat\
-            ['time_min']:
-            self.entities['PC'].combat['timer'] = 0.0
 """------------------------------------------------------------------------"""
 
 """Instantiate the universe and call the built in Panda3d run() function""" 
